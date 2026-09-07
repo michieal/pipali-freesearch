@@ -11,6 +11,50 @@ export function formatFileSize(bytes: number): string {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+/** Build the <attached_files> block a user message carries to the agent. */
+export function formatAttachedFilesBlock(filePaths: string[]): string {
+    if (filePaths.length === 0) return '';
+    return `\n\n<attached_files>\n${filePaths.map(p => `- ${p}`).join('\n')}\n</attached_files>`;
+}
+
+/**
+ * A soft stamp for when a message was sent: the time alone for today, the weekday
+ * within the past week, and the date beyond that. All parts come from the locale, so
+ * no part of it needs translating.
+ */
+export function formatMessageTime(timestamp: string, locale?: string, now: Date = new Date()): string {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const time = date.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const daysAgo = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
+
+    if (daysAgo === 0) return time;
+    if (daysAgo > 0 && daysAgo < 7) return `${date.toLocaleDateString(locale, { weekday: 'short' })} ${time}`;
+
+    const day = date.toLocaleDateString(locale, {
+        month: 'short',
+        day: 'numeric',
+        ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+    });
+    return `${day}, ${time}`;
+}
+
+/**
+ * How long a run has been going, or took. Seconds are padded once minutes appear so
+ * the value holds its width as it ticks.
+ */
+export function formatRunDuration(ms: number): string {
+    const seconds = Math.max(0, Math.floor(ms / 1000));
+    if (seconds < 60) return `${seconds}s`;
+
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ${String(seconds % 60).padStart(2, '0')}s`;
+
+    return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
+}
+
 /**
  * Convert snake_case tool name to Title Case
  */
@@ -612,4 +656,15 @@ export function formatDelegationToolResult(
         })
         .join('\n\n---\n\n')
         .trim();
+}
+
+/**
+ * Compact size for a live character count. Above a thousand it keeps one decimal
+ * rather than dropping to a whole number, so a ticking counter holds its width
+ * instead of jittering the row each time it crosses a boundary.
+ */
+export function formatCharCount(chars: number): string {
+    if (chars < 1000) return String(chars);
+    if (chars < 1_000_000) return `${(chars / 1000).toFixed(1)}K`;
+    return `${(chars / 1_000_000).toFixed(1)}M`;
 }

@@ -18,8 +18,12 @@ export type Message = {
     runErrorInfo?: {
         message: string;
     };
-    /** File names attached by the user (extracted from <attached_files> block) */
+    /** Paths of files attached by the user (extracted from <attached_files> block) */
     attachedFiles?: string[];
+    /** ISO timestamp of when the message was recorded; for an agent message, when its run ended */
+    createdAt?: string;
+    /** ISO timestamp of when the run behind an agent message began */
+    startedAt?: string;
     /** True for user messages waiting in the soft-interrupt queue (run_started not yet received). */
     isQueued?: boolean;
 };
@@ -33,5 +37,9 @@ export type Thought = {
     toolResult?: string;
     isInternalThought?: boolean; // True for model's internal reasoning (rendered in italics)
     isPending?: boolean; // True for tool calls that are currently executing (no results yet)
+    /** True while this is a live preview from the model's stream, superseded once the step lands */
+    isStreaming?: boolean;
+    /** Characters of tool call arguments the model has written so far */
+    argChars?: number;
     stepGroupId?: string; // Groups flattened thoughts/tool calls that came from the same trajectory step
 };

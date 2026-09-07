@@ -35,10 +35,12 @@ try {
     mkdirSync(baseDir, { recursive: true });
     process.env.POSTGRES_DB ||= `${baseDir}/pipali-unit-${process.pid}-${Date.now()}`;
     process.env.PIPALI_MEMORY_DIR ||= `${baseDir}/pipali-unit-${process.pid}-memory`;
+    process.env.PIPALI_LOGS_DIR ||= `${baseDir}/pipali-unit-${process.pid}-logs`;
 } catch {
     // If /tmp isn't available, fall back to cwd
     process.env.POSTGRES_DB ||= `${process.cwd()}/.pipali-unit-test.db`;
     process.env.PIPALI_MEMORY_DIR ||= `${process.cwd()}/.pipali-unit-test-memory`;
+    process.env.PIPALI_LOGS_DIR ||= `${process.cwd()}/.pipali-unit-test-logs`;
 }
 
 process.env.PIPALI_TEST_MODE ||= 'true';
@@ -92,14 +94,25 @@ mock.module(dbSchemaModule, () => {
             serverId: 'mcp_oauth_state.server_id',
             $inferSelect: {},
         },
-        Automation: { $inferSelect: {} },
-        AutomationExecution: { $inferSelect: {} },
+        Automation: {
+            id: 'automation.id',
+            userId: 'automation.userId',
+            conversationId: 'automation.conversationId',
+            $inferSelect: {},
+        },
+        AutomationExecution: {
+            id: 'automation_execution.id',
+            automationId: 'automation_execution.automationId',
+            status: 'automation_execution.status',
+            $inferSelect: {},
+        },
         PendingConfirmation: {
             id: 'id',
             executionId: 'executionId',
             request: 'request',
             status: 'status',
             expiresAt: 'expiresAt',
+            respondedAt: 'respondedAt',
             $inferSelect: {},
         },
         // Sandbox settings table with column references
@@ -112,6 +125,24 @@ mock.module(dbSchemaModule, () => {
             deniedReadPaths: 'deniedReadPaths',
             allowedDomains: 'allowedDomains',
             allowLocalBinding: 'allowLocalBinding',
+            $inferSelect: {},
+        },
+        // Web Push: subscriptions and the VAPID keypair that addresses them
+        NotificationSettings: {
+            id: 'id',
+            userId: 'userId',
+            vapidPublicKey: 'vapidPublicKey',
+            vapidPrivateKey: 'vapidPrivateKey',
+            $inferSelect: {},
+        },
+        PushSubscription: {
+            id: 'id',
+            userId: 'userId',
+            endpoint: 'endpoint',
+            p256dh: 'p256dh',
+            auth: 'auth',
+            label: 'label',
+            lastNotifiedAt: 'lastNotifiedAt',
             $inferSelect: {},
         },
         // Web search/scraper tables with column references for queries
@@ -142,7 +173,13 @@ mock.module(dbModule, () => {
             select() {
                 return {
                     from(table: unknown) {
-                        return {
+                        const builder = {
+                            innerJoin() {
+                                return builder;
+                            },
+                            leftJoin() {
+                                return builder;
+                            },
                             where(condition: unknown) {
                                 const adapter = getUnitDb();
                                 if (adapter?.select) {
@@ -151,6 +188,7 @@ mock.module(dbModule, () => {
                                 throw new Error('DB disabled in unit tests');
                             },
                         };
+                        return builder;
                     },
                 };
             },

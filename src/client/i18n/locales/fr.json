@@ -92,7 +92,8 @@
         "waitForTasks": "pour {{tasks}}",
         "noRunInProgress": "Aucune t\u00e2che n\u2019\u00e9tait en cours.",
         "recalledMemories_one": "{{count}} souvenir rappel\u00e9.",
-        "recalledMemories_other": "{{count}} souvenirs rappel\u00e9s."
+        "recalledMemories_other": "{{count}} souvenirs rappel\u00e9s.",
+        "streamedArgs": "{{chars}} caractères"
     },
     "home": {
         "greetings": {
@@ -253,7 +254,19 @@
         "questionFromPipali": "Question de Pipali",
         "actionRequired": "Action requise",
         "taskComplete": "T\u00e2che termin\u00e9e",
-        "taskFinished": "Ta t\u00e2che est termin\u00e9e"
+        "taskFinished": "Ta t\u00e2che est termin\u00e9e",
+        "push": {
+            "title": "Notifications sur le téléphone",
+            "description": "Sois prévenu quand Pipali termine ou demande ton accord, même application fermée.",
+            "unsupported": "Ce navigateur ne peut pas recevoir de notifications. Sur iPhone, ouvre Pipali dans Safari et ajoute-le à l'écran d'accueil. Une connexion sécurisée (https) est requise.",
+            "denied": "Les notifications sont bloquées pour ce site. Autorise-les dans les réglages du navigateur, puis réessaie.",
+            "failed": "Impossible d'activer les notifications.",
+            "devices": "Appareils notifiés",
+            "noDevices": "Aucun appareil. Active ceci partout où tu veux être joignable.",
+            "never": "Jamais notifié",
+            "lastNotified": "Dernière notification {{when}}",
+            "remove": "Ne plus notifier cet appareil"
+        }
     },
     "voice": {
         "beta": "Bêta",
@@ -276,6 +289,12 @@
             "spokenHint": "Dis \"Pipali, speak freely\" ou \"Pipali, ask first\" à tout moment"
         },
         "enabledHint": "Quand le mode vocal est actif, la parole captée près de cet appareil est transcrite pour vérifier si tu t'adresses à Pipali ; la parole non adressée est ignorée et jamais conservée.",
+        "gender": {
+            "label": "Voix",
+            "hint": "La voix de Pipali quand il lit à voix haute.",
+            "female": "Féminine",
+            "male": "Masculine"
+        },
         "status": {
             "idle": "À l'écoute de \"Pipali…\" — appuie pour parler",
             "dormant": "Mode vocal en veille — appuie pour le réveiller",
@@ -290,7 +309,7 @@
             "dormant": "Le mode vocal dort — touche le micro pour le réveiller",
             "goAheadPending": "Pipali a quelque chose pour toi — dis \"Pipali, go ahead\"",
             "goAheadResult": "Tes résultats sont prêts — dis \"Pipali, go ahead\" pour les entendre",
-            "speaking": "Parle pour interrompre — ou dis \"stop\" pour le silence",
+            "speaking": "Dis \"Pipali…\" pour interrompre — ou \"Pipali, stop\" pour le silence",
             "listening": "Dis \"send it\" quand tu as fini, \"scratch that\" pour recommencer",
             "listeningDecision": "Dis \"yes\", \"no\", ou donne tes propres instructions",
             "listeningQuestion": "Réponds à voix haute — dis \"send it\" quand tu as fini"
@@ -398,6 +417,9 @@
         "instructionsSubtitle": "Que veux-tu que Pipali fasse ?",
         "instructionsPlaceholder": "Cr\u00e9er un r\u00e9sum\u00e9 des derni\u00e8res actualit\u00e9s sur l'IA dans la sant\u00e9.",
         "schedule": "Calendrier",
+        "model": "Mod\u00e8le",
+        "defaultModel": "Mon mod\u00e8le par d\u00e9faut ({{model}})",
+        "defaultModelUnknown": "Mon mod\u00e8le par d\u00e9faut",
         "scheduleHint": "(Facultatif - ex\u00e9cuter selon un calendrier r\u00e9current)",
         "every": "Chaque",
         "frequencyHour": "Heure",
@@ -620,6 +642,11 @@
     },
     "messages": {
         "deleteMessage": "Supprimer le message",
+        "copyMessage": "Copier le message",
+        "editMessage": "Modifier le message",
+        "forkConversation": "Bifurquer la conversation à partir d'ici",
+        "forkedTitle": "Bifurcation : {{title}}",
+        "resend": "Renvoyer",
         "pleaseLookAtFiles": "Consulte les fichiers joints.",
         "queued": "En file d'attente"
     }

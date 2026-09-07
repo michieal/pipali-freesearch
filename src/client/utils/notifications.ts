@@ -9,11 +9,10 @@ import type { ConfirmationRequest } from '../../server/processor/confirmation/co
 import i18n from '../i18n';
 import { VOICE_EARCONS, TRANSCRIPT_TICK, clampTickCount, tickBurstDurationMs, type EarconNote, type VoiceCueProfile } from './voice/voice-earcons';
 import { VOICE_TUNABLES } from './voice/voice-config';
+import { StreamResampler } from './voice/voice-pcm';
+import { ensureAudioContext, currentAudioContext } from './audio-context';
 
 let notificationPermissionGranted: boolean | null = null;
-
-// Shared AudioContext for notification sounds (created lazily)
-let audioCtx: AudioContext | null = null;
 
 // Speech sits behind its own gain so a suspected barge-in can duck it without
 // touching the cue vocabulary, which stays at full level.
@@ -59,19 +58,10 @@ function playNotificationSound(): void {
 // Voice companion audio: distinct attention cues + a TTS playback queue
 // ============================================================================
 
-/** Lazily create (and resume) the shared AudioContext. */
-function ensureAudioContext(): AudioContext | null {
-    try {
-        if (!audioCtx) audioCtx = new AudioContext();
-        if (audioCtx.state === 'suspended') void audioCtx.resume();
-        return audioCtx;
-    } catch {
-        return null;
-    }
-}
-
+// The gain belongs to the context that made it, so a context replaced after a
+// route change gets a fresh one rather than a node wired to a closed graph.
 function ensureSpeechGain(ctx: AudioContext): GainNode {
-    if (!speechGain) {
+    if (!speechGain || speechGain.context !== ctx) {
         speechGain = ctx.createGain();
         speechGain.connect(ctx.destination);
     }
@@ -85,10 +75,11 @@ function ensureSpeechGain(ctx: AudioContext): GainNode {
  * response to a real interruption immediate instead of a transcription away.
  */
 export function duckSpeech(ducked: boolean): void {
-    if (!audioCtx || !speechGain) return;
+    const ctx = currentAudioContext();
+    if (!ctx || !speechGain || speechGain.context !== ctx) return;
     const target = ducked ? VOICE_TUNABLES.duckGain : 1;
-    speechGain.gain.cancelScheduledValues(audioCtx.currentTime);
-    speechGain.gain.setTargetAtTime(target, audioCtx.currentTime, 0.02);
+    speechGain.gain.cancelScheduledValues(ctx.currentTime);
+    speechGain.gain.setTargetAtTime(target, ctx.currentTime, 0.02);
 }
 
 // Earcon vocabulary (pure data + duration math) lives in voice-earcons.ts so
@@ -159,9 +150,12 @@ export interface PcmStream {
 }
 
 /**
- * Play a decoded PCM stream gaplessly: each block is scheduled right behind
- * the previous one, so playback starts on the first block while later ones
- * are still arriving. A network stall leaves a silence, then speech resumes.
+ * Play a decoded PCM stream gaplessly: blocks are resampled to the context's
+ * own rate, coalesced, and scheduled behind one another on a running clock
+ * kept a lead ahead of the speaker, so playback starts early while later
+ * blocks are still arriving and ordinary arrival jitter is absorbed by the
+ * lead. Only a real underrun — the schedule falling back to the speaker —
+ * leaves a silence and re-leads after it.
  */
 async function playPcmStream(ctx: AudioContext, stream: PcmStream): Promise<void> {
     const gain = ensureSpeechGain(ctx);
@@ -183,26 +177,69 @@ async function playPcmStream(ctx: AudioContext, stream: PcmStream): Promise<void
         maybeSettle();
     };
     stopActiveSpeech = stop;
+    // A context replaced after a route change is closed; its sources never end.
+    ctx.addEventListener('statechange', () => { if (ctx.state === 'closed') stop(); });
     // Consume in the background: a stop must release this readout immediately,
     // even while the loop is suspended waiting on a stalled producer.
     void (async () => {
+        let queued: Float32Array[] = [];
+        let queuedSamples = 0;
+        // Built on the first block, once the stream's header has given a rate.
+        let resampler: StreamResampler | null = null;
+        const toContextRate = (block: Float32Array): Float32Array => {
+            if (stream.sampleRate === ctx.sampleRate) return block;
+            if (!resampler) {
+                if (ctx.sampleRate < stream.sampleRate) {
+                    // The speech is wider than the output can carry, so the top
+                    // of it is being filtered away. Worth knowing about: it
+                    // means the device put us on a narrowband route.
+                    console.warn(`[voice] output runs at ${ctx.sampleRate}Hz, below the ${stream.sampleRate}Hz speech`);
+                }
+                resampler = new StreamResampler(stream.sampleRate, ctx.sampleRate);
+            }
+            return resampler.push(block);
+        };
+        /** The resampler's tail, once no more input is coming. */
+        const drainContextRate = (): Float32Array => resampler?.flush() ?? new Float32Array(0);
+        const enqueue = (block: Float32Array) => {
+            if (!block.length) return;
+            queued.push(block);
+            queuedSamples += block.length;
+        };
+        const schedule = () => {
+            if (!queuedSamples) return;
+            const samples = new Float32Array(queuedSamples);
+            let at = 0;
+            for (const part of queued) { samples.set(part, at); at += part.length; }
+            queued = [];
+            queuedSamples = 0;
+
+            const buffer = ctx.createBuffer(1, samples.length, ctx.sampleRate);
+            buffer.copyToChannel(samples, 0);
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(gain);
+            if (nextStart - ctx.currentTime < VOICE_TUNABLES.speechMinLeadMs / 1000) {
+                nextStart = ctx.currentTime + VOICE_TUNABLES.speechLeadMs / 1000;
+            }
+            source.start(nextStart);
+            nextStart += buffer.duration;
+            active.add(source);
+            source.onended = () => { active.delete(source); maybeSettle(); };
+        };
         try {
             for await (const block of stream.blocks()) {
                 if (stopped) break;
                 if (!block.length || !stream.sampleRate) continue;
-                const buffer = ctx.createBuffer(1, block.length, stream.sampleRate);
-                buffer.copyToChannel(block, 0);
-                const source = ctx.createBufferSource();
-                source.buffer = buffer;
-                source.connect(gain);
-                nextStart = Math.max(nextStart, ctx.currentTime + 0.03);
-                source.start(nextStart);
-                nextStart += buffer.duration;
-                active.add(source);
-                source.onended = () => { active.delete(source); maybeSettle(); };
+                enqueue(toContextRate(block));
+                if (queuedSamples >= (VOICE_TUNABLES.speechBlockMs / 1000) * ctx.sampleRate) schedule();
             }
         } catch {
-            // Synthesis failed mid-stream — let whatever was scheduled finish.
+            // Synthesis failed mid-stream — play whatever did arrive.
+        }
+        if (!stopped) {
+            enqueue(drainContextRate());
+            schedule();
         }
         streamEnded = true;
         maybeSettle();

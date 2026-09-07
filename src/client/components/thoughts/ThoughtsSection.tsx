@@ -2,10 +2,11 @@
 // Uses org-mode S-TAB style 3-level cycling: Collapsed → Outline → Full → Collapsed
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, ChevronUp, Globe, FileSearch, Pencil, Terminal, Wrench } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Globe, FileSearch, Pencil, Lightbulb, Terminal, Wrench } from 'lucide-react';
 import type { Thought } from '../../types';
 import { ThoughtItem } from './ThoughtItem';
-import { buildDelegatedTaskTitleMap, getToolCategory, type ToolCategory } from '../../utils/formatting';
+import { RunTimer } from './RunTimer';
+import { buildDelegatedTaskTitleMap, formatCharCount, getToolCategory, type ToolCategory } from '../../utils/formatting';
 import { parseSnapshotUids } from '../../utils/snapshotParser';
 
 const CATEGORY_ICONS: Record<ToolCategory, React.ComponentType<{ size?: number }>> = {
@@ -38,6 +39,8 @@ const CHEVRON_ICONS: Record<ExpandLevel, React.ComponentType<{ size?: number; cl
 interface ThoughtsSectionProps {
     thoughts: Thought[];
     isStreaming?: boolean;
+    startedAt?: string;
+    endedAt?: string;
 }
 
 // Split a thought with multiple **heading** sections into separate thoughts for display.
@@ -93,7 +96,7 @@ export function getCollapsedPreviewThoughts(thoughts: Thought[]): Thought[] {
         });
 }
 
-export function ThoughtsSection({ thoughts, isStreaming }: ThoughtsSectionProps) {
+export function ThoughtsSection({ thoughts, isStreaming, startedAt, endedAt }: ThoughtsSectionProps) {
     const [expandLevel, setExpandLevel] = useState<ExpandLevel>(getStoredExpandLevel);
     // Per-item overrides: at level 1, toggled items show full; at level 2, toggled items show outline
     const [toggledItems, setToggledItems] = useState<Set<string>>(new Set());
@@ -111,7 +114,19 @@ export function ThoughtsSection({ thoughts, isStreaming }: ThoughtsSectionProps)
     if (thoughts.length === 0) return null;
 
     const toolCalls = thoughts.filter(t => t.type === 'tool_call');
-    const thoughtCount = thoughts.filter(t => t.type === 'thought').length;
+    // Collapsed hides reasoning itself, so its size is the only sign the model is
+    // thinking. Its own trail category marks the count as reasoning, not as another tool.
+    const internalThoughts = thoughts.filter(t => t.type === 'thought' && t.isInternalThought);
+    const reasoningChars = internalThoughts.reduce((total, t) => total + t.content.trim().length, 0);
+    const isThinking = internalThoughts.some(t => t.isStreaming);
+    const reasoningTrailEntry = reasoningChars > 0 && (
+        <span className="trail-group">
+            <span className={`trail-icon trail-icon--reasoning${isThinking ? ' trail-icon--pending' : ''}`}>
+                <Lightbulb size={10} />
+            </span>
+            <span className="trail-group-count">{formatCharCount(reasoningChars)}</span>
+        </span>
+    );
 
     // Build uid→label map from chrome snapshot results for resolving interaction tool args
     const uidMap = useMemo(() => {
@@ -134,11 +149,16 @@ export function ThoughtsSection({ thoughts, isStreaming }: ThoughtsSectionProps)
             : []
     ), [expandLevel, isStreaming, thoughts]);
 
+    // Which step the preview is showing, keyed the way the preview itself selects one.
+    const previewStepKey = collapsedPreviewThoughts[0]?.stepGroupId ?? collapsedPreviewThoughts[0]?.id;
+
+    // Open each step on its first row. Within a step the reader is left where they are:
+    // the preview redraws on every streamed character, and following that would both
+    // fight anyone scrolling back and hold the view on the step's last row.
     useEffect(() => {
         const preview = previewRef.current;
-        if (!preview || collapsedPreviewThoughts.length === 0) return;
-        preview.scrollTop = preview.scrollHeight;
-    }, [collapsedPreviewThoughts]);
+        if (preview) preview.scrollTop = 0;
+    }, [previewStepKey]);
 
     // Cycle: 0 → 1 → 2 → 0
     const cycleExpand = () => {
@@ -154,10 +174,7 @@ export function ThoughtsSection({ thoughts, isStreaming }: ThoughtsSectionProps)
     // Render grouped category icons with counts for the toggle button
     const renderSummary = () => {
         if (toolCalls.length === 0) {
-            if (thoughtCount > 0) {
-                return <span className="thoughts-summary-text">Reasoning</span>;
-            }
-            return null;
+            return reasoningTrailEntry ? <span className="thoughts-icon-trail">{reasoningTrailEntry}</span> : null;
         }
 
         // Count tool calls by category
@@ -190,6 +207,7 @@ export function ThoughtsSection({ thoughts, isStreaming }: ThoughtsSectionProps)
                             </span>
                         );
                     })}
+                {reasoningTrailEntry}
             </span>
         );
     };
@@ -208,6 +226,7 @@ export function ThoughtsSection({ thoughts, isStreaming }: ThoughtsSectionProps)
                     </span>
                     <Chevron size={14} className="thoughts-chevron" />
                 </button>
+                {startedAt && <RunTimer startedAt={startedAt} endedAt={endedAt} isRunning={isStreaming} />}
             </div>
 
             {/* Show assistant-visible messages and tool calls while collapsed, without tool results */}
@@ -226,6 +245,7 @@ export function ThoughtsSection({ thoughts, isStreaming }: ThoughtsSectionProps)
                                     showResult={false}
                                     uidMap={uidMap}
                                     delegatedTaskTitles={delegatedTaskTitles}
+                                    runStreaming={isStreaming}
                                 />
                             );
                         })}
@@ -255,6 +275,7 @@ export function ThoughtsSection({ thoughts, isStreaming }: ThoughtsSectionProps)
                                     onToggle={() => toggleItem(thought.id)}
                                     uidMap={uidMap}
                                     delegatedTaskTitles={delegatedTaskTitles}
+                                    runStreaming={isStreaming}
                                 />
                             );
                         })}

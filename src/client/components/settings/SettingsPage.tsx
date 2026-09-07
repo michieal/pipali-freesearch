@@ -7,7 +7,9 @@ import { apiFetch } from '../../utils/api';
 import { SUPPORTED_LANGUAGES } from '../../i18n';
 import { PathListEditor } from './PathListEditor';
 import { MemorySettingsSection } from './MemorySettingsSection';
+import { NotificationsSection } from './NotificationsSection';
 import { useVoiceSettings } from '../../hooks/useVoiceSettings';
+import type { VoiceGender } from '../../utils/voice/voice-config';
 
 type SettingsTab = 'profile' | 'permissions';
 
@@ -64,7 +66,7 @@ export function SettingsPage({ onUserContextSaved }: SettingsPageProps) {
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
     const [error, setError] = useState<string | null>(null);
     // Voice feature flag (beta, per-device). Session mode lives in the chat-input menu.
-    const { enabled: voiceFeatureEnabled, setEnabled: setVoiceEnabled } = useVoiceSettings();
+    const { enabled: voiceFeatureEnabled, setEnabled: setVoiceEnabled, gender: voiceGender, setGender: setVoiceGender } = useVoiceSettings();
 
     // Sandbox state
     const [sandboxStatus, setSandboxStatus] = useState<SandboxStatus | null>(null);
@@ -370,6 +372,8 @@ export function SettingsPage({ onUserContextSaved }: SettingsPageProps) {
 
                         <MemorySettingsSection />
 
+                        <NotificationsSection />
+
                         {/* Voice mode (beta) — gates all voice UI and the mic session */}
                         <div className="settings-section">
                             <div className="settings-section-header">
@@ -395,6 +399,22 @@ export function SettingsPage({ onUserContextSaved }: SettingsPageProps) {
                             </div>
                             <p className="settings-field-hint">{t('voice.betaHint')}</p>
                             <p className="settings-field-hint">{t('voice.enabledHint')}</p>
+                            {voiceFeatureEnabled && (
+                                <div className="settings-field settings-field-inline">
+                                    <div>
+                                        <label htmlFor="voice-gender">{t('voice.gender.label')}</label>
+                                        <p className="settings-field-hint">{t('voice.gender.hint')}</p>
+                                    </div>
+                                    <select
+                                        id="voice-gender"
+                                        value={voiceGender}
+                                        onChange={(e) => setVoiceGender(e.target.value as VoiceGender)}
+                                    >
+                                        <option value="female">{t('voice.gender.female')}</option>
+                                        <option value="male">{t('voice.gender.male')}</option>
+                                    </select>
+                                </div>
+                            )}
                         </div>
 
                         {/* Sandbox toggle */}

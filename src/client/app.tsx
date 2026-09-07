@@ -27,7 +27,9 @@ import { useFocusManagement, useFileDrop, useModels, useSidecar, useWebSocketCha
 
 // Utils
 import { setApiBaseUrl, apiFetch } from "./utils/api";
-import { generateUUID, generateDeterministicId, getToolCategory, type ToolCategory } from "./utils/formatting";
+import { IS_TOUCH } from "./utils/platform";
+import { generateUUID, generateDeterministicId, getToolCategory, formatAttachedFilesBlock, type ToolCategory } from "./utils/formatting";
+import { ensureServiceWorker } from "./utils/push";
 import { initNotifications, notifyConfirmationRequest, notifyTaskComplete, setNotificationClickHandler, setupNotificationClickListener, warmAudioContext } from "./utils/notifications";
 import { ConversationNavigationContext } from "./hooks/useConversationNavigation";
 import { useVoiceSettings } from "./hooks/useVoiceSettings";
@@ -36,7 +38,7 @@ import type { VoiceMode } from "./utils/voice/voice-config";
 import { isTauri, onWindowShown, onSidecarReady, listenForDeepLinks } from "./utils/tauri";
 
 // Components
-import { Header, Sidebar, InputArea } from "./components/layout";
+import { Header, Sidebar, InputArea, PullToRefresh } from "./components/layout";
 import { MessageList } from "./components/messages";
 import { ToastContainer } from "./components/confirmation/ToastContainer";
 import { HomePage } from "./components/home";
@@ -180,7 +182,7 @@ const App = () => {
     // Hooks
     const { textareaRef, scheduleTextareaFocus } = useFocusManagement();
     const { models, defaultModel, selectedModel, setSelectedModel, selectModel, showModelDropdown, setShowModelDropdown, refetchModels } = useModels();
-    const { isDragging, stagedFiles, uploadFiles, pickAndStageFiles, removeFile, clearFiles, formatAttachedFilesMessage } = useFileDrop();
+    const { isDragging, stagedFiles, uploadFiles, pickAndStageFiles, removeFile, clearFiles } = useFileDrop();
     const wsUrl = `${wsBaseUrl}/ws/chat`;
 
     // Voice companion handlers are wired after the hook; the ref lets the
@@ -192,7 +194,7 @@ const App = () => {
         onStepStart: (convId: string) => void;
     } | null>(null);
     // Let the voice companion (wired above sendMessage) reuse the standard send pipeline.
-    const sendMessageRef = useRef<((e?: React.FormEvent, options?: { text?: string }) => void) | null>(null);
+    const sendMessageRef = useRef<((e?: React.FormEvent, options?: { text?: string; attachedFiles?: string[] }) => void) | null>(null);
 
     const {
         isConnected,
@@ -252,6 +254,12 @@ const App = () => {
             voiceCompanionRef.current?.onConfirmationRequest(request, convId, runId);
         },
         onConfirmationResolved: (requestId, convId) => {
+            // Drop the polled copy of a routine's confirmation too, so answering the live
+            // one doesn't leave the dialog to reappear until the next poll.
+            setAutomationConfirmations(prev => {
+                const remaining = prev.filter(c => c.request.requestId !== requestId);
+                return remaining.length === prev.length ? prev : remaining;
+            });
             voiceCompanionRef.current?.onConfirmationResponded(requestId, convId);
         },
         onRunStarted: (convId) => {
@@ -348,7 +356,7 @@ const App = () => {
 
     // Voice companion — hands-free layer over the chat run flow.
     // While feature flag off, no voice UI renders and voice mode is 'off', so no session can start.
-    const { enabled: voiceFeatureEnabled, mode: voiceMode, lastActiveMode: lastVoiceMode, setMode: setVoiceMode } = useVoiceSettings();
+    const { enabled: voiceFeatureEnabled, mode: voiceMode, lastActiveMode: lastVoiceMode, setMode: setVoiceMode, gender: voiceGender } = useVoiceSettings();
 
     // Late-bound: stopResearch is defined below, and voice only calls it on speech.
     const stopResearchRef = useRef<() => void>(() => {});
@@ -360,6 +368,7 @@ const App = () => {
 
     const voice = useVoiceCompanion({
         mode: voiceMode,
+        voice: voiceGender,
         activeConversationId: conversationId,
         sendMessage: sendVoiceMessage,
         respondToConfirmation,
@@ -494,6 +503,8 @@ const App = () => {
     // Initialize native OS notifications and register click handler
     useEffect(() => {
         initNotifications();
+
+        ensureServiceWorker();
 
         // Register click handler for web notifications (navigates to conversation)
         // This handler is also used by the focus navigation listener for Tauri notifications
@@ -827,11 +838,18 @@ const App = () => {
                 const data = await res.json();
                 const newConfirmations: AutomationPendingConfirmation[] = data.confirmations || [];
 
+                // A confirmation from a routine this client is watching already announced
+                // itself live, so the poll finding it again is not news.
+                const announcedLive = new Set<string>();
+                for (const queue of pendingConfirmationsRef.current.values()) {
+                    for (const item of queue) announcedLive.add(item.request.requestId);
+                }
+
                 // Notify for any new confirmations that weren't in the previous state
                 setAutomationConfirmations(prev => {
                     const prevIds = new Set(prev.map(c => c.id));
                     for (const confirmation of newConfirmations) {
-                        if (!prevIds.has(confirmation.id)) {
+                        if (!prevIds.has(confirmation.id) && !announcedLive.has(confirmation.request.requestId)) {
                             // New confirmation - send OS notification with conversation ID for navigation
                             notifyConfirmationRequest(
                                 confirmation.request,
@@ -950,12 +968,17 @@ const App = () => {
             let currentAgentMessage: Message | null = null;
             let thoughts: Thought[] = [];
             let firstAgentStepId: string | null = null;
+            // A run is bracketed by the user step that started it and its own last step.
+            let runStartedAt: string | undefined;
+            let lastAgentTimestamp: string | undefined;
 
             const finalizeCurrentAgent = () => {
                 if (currentAgentMessage) {
                     if (thoughts.length > 0) {
                         currentAgentMessage.thoughts = thoughts;
                     }
+                    currentAgentMessage.startedAt = runStartedAt;
+                    currentAgentMessage.createdAt = lastAgentTimestamp;
                     historyMessages.push(currentAgentMessage);
                 } else if (thoughts.length > 0) {
                     // Use the first agent step_id for orphaned thoughts so deletion works
@@ -966,11 +989,14 @@ const App = () => {
                         thoughts: thoughts,
                         id: msgId,
                         stableId: msgId,
+                        startedAt: runStartedAt,
+                        createdAt: lastAgentTimestamp,
                     });
                 }
                 thoughts = [];
                 currentAgentMessage = null;
                 firstAgentStepId = null;
+                lastAgentTimestamp = undefined;
             };
 
             for (const msg of data.history) {
@@ -1011,7 +1037,7 @@ const App = () => {
                     const rawContent = typeof msg.message === 'string' ? msg.message : JSON.stringify(msg.message);
                     const attachMatch = rawContent.match(/\n\n<attached_files>\n([\s\S]*?)\n<\/attached_files>$/);
                     const attachedFiles = attachMatch
-                        ? attachMatch[1].split('\n').map((line: string) => line.replace(/^- /, '').split('/').pop() || '').filter(Boolean)
+                        ? attachMatch[1].split('\n').map((line: string) => line.replace(/^- /, '').trim()).filter(Boolean)
                         : undefined;
                     const stepId = msg.step_id != null ? String(msg.step_id) : generateUUID();
                     historyMessages.push({
@@ -1020,7 +1046,9 @@ const App = () => {
                         id: stepId,
                         stableId: stepId,
                         attachedFiles,
+                        createdAt: msg.timestamp,
                     });
+                    runStartedAt = msg.timestamp;
                 }
 
                 if (msg.source === 'agent') {
@@ -1028,6 +1056,7 @@ const App = () => {
                     if (firstAgentStepId === null) {
                         firstAgentStepId = msg.step_id != null ? String(msg.step_id) : generateUUID();
                     }
+                    lastAgentTimestamp = msg.timestamp;
                     let toolResultsMap: Map<string, string> = new Map();
                     const hasMessage = msg.message && msg.message.trim() !== '';
                     const stepGroupId = msg.tool_calls && msg.tool_calls.length > 0
@@ -1497,6 +1526,90 @@ const App = () => {
         }
     };
 
+    /**
+     * Rewind the conversation to just before a message, then ask it again with the
+     * edited text. Everything the agent said after it is dropped, so the new answer
+     * takes the place of the old one instead of landing at the end of the thread.
+     * The rewrite falls back to the composer if the rewind fails, rather than vanishing.
+     */
+    const editMessage = async (messageId: string, text: string) => {
+        if (!conversationId) return;
+
+        const index = messages.findIndex(m => m.id === messageId);
+        if (index === -1) return;
+
+        // Rewinding with no way to send would drop the turn and the rewrite with it
+        if (!isConnected) {
+            setInput(text);
+            return;
+        }
+
+        try {
+            const res = await apiFetch(`/api/conversations/${conversationId}/messages/${messageId}?role=user&rewind=true`, {
+                method: 'DELETE'
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                console.error("Failed to rewind conversation:", data.error);
+                setInput(text);
+                return;
+            }
+        } catch (e) {
+            console.error("Failed to rewind conversation", e);
+            setInput(text);
+            return;
+        }
+
+        const kept = messages.slice(0, index);
+        setChatMessages(kept);
+        syncConversationState(conversationId, kept);
+
+        sendMessage(undefined, { text, attachedFiles: messages[index]?.attachedFiles });
+    };
+
+    /**
+     * Branch the conversation into a copy of itself that stops just short of a message,
+     * handing that message back to the composer. The same rewrite `editMessage` makes
+     * in place, without disturbing the thread it came from.
+     */
+    const forkConversationFrom = async (messageId: string) => {
+        if (!conversationId) return;
+
+        const stepId = Number(messageId);
+        if (!Number.isInteger(stepId)) return;
+        const message = messages.find(m => m.id === messageId);
+        const upToStepId = stepId - 1;
+
+        // Nothing precedes the opening question, so a fork of it is just a fresh chat.
+        if (upToStepId < 1) {
+            startNewConversation();
+            setInput(message?.content ?? '');
+            return;
+        }
+
+        const sourceTitle = conversations.find(c => c.id === conversationId)?.title;
+        try {
+            const res = await apiFetch(`/api/conversations/${conversationId}/fork`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    upToStepId,
+                    ...(sourceTitle && { title: t('messages.forkedTitle', { title: sourceTitle }) }),
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                console.error("Failed to fork conversation:", data.error);
+                return;
+            }
+            await fetchConversations();
+            selectConversation(data.conversationId);
+            setInput(message?.content ?? '');
+        } catch (e) {
+            console.error("Failed to fork conversation", e);
+        }
+    };
+
     // ===== Billing Actions =====
 
     const handleBillingDismiss = (messageId: string) => {
@@ -1599,10 +1712,10 @@ const App = () => {
     };
 
     // Transform chat confirmation to standard format
-    const toChatConfirmation = useCallback((convId: string, request: ConfirmationRequest, convTitle: string): PendingConfirmation => ({
+    const toChatConfirmation = useCallback((convId: string, request: ConfirmationRequest, convTitle: string, isRoutine: boolean): PendingConfirmation => ({
         key: `chat-${convId}-${request.requestId}`,
         request,
-        source: { type: 'chat', conversationId: convId, conversationTitle: convTitle },
+        source: { type: 'chat', conversationId: convId, conversationTitle: convTitle, isRoutine },
     }), []);
 
     // Transform automation confirmation to standard format
@@ -1628,10 +1741,16 @@ const App = () => {
             const conv = conversations.find(c => c.id === convId);
             const convTitle = conv?.title || t('tasks.backgroundTask');
             for (const item of queue) {
-                chatConfirmations.push(toChatConfirmation(convId, item.request, convTitle));
+                chatConfirmations.push(toChatConfirmation(convId, item.request, convTitle, !!conv?.isAutomation));
             }
         }
-        const automationConfirmationsList = automationConfirmations.map(toAutomationConfirmation);
+        // A routine's confirmation arrives live on its conversation and is polled for
+        // separately, so the same request can show up twice. The live copy is answerable
+        // over the open socket, so it wins.
+        const liveRequestIds = new Set(chatConfirmations.map(c => c.request.requestId));
+        const automationConfirmationsList = automationConfirmations
+            .filter(c => !liveRequestIds.has(c.request.requestId))
+            .map(toAutomationConfirmation);
         return [...chatConfirmations, ...automationConfirmationsList];
     }, [pendingConfirmations, automationConfirmations, conversations, toChatConfirmation, toAutomationConfirmation]);
 
@@ -1662,15 +1781,18 @@ const App = () => {
         }
     };
 
-    const sendMessage = async (e?: React.FormEvent, options?: { text?: string }) => {
+    const sendMessage = async (e?: React.FormEvent, options?: { text?: string; attachedFiles?: string[] }) => {
         e?.preventDefault();
         if (!isConnected) return;
 
-        // Voice supplies the message text directly; typed sends read the composer.
-        const isVoice = options?.text !== undefined;
+        // Voice and message edits supply the text directly; typed sends read the composer.
+        const isSupplied = options?.text !== undefined;
         const rawValue = options?.text ?? (textareaRef.current?.value ?? input);
         let messageText = rawValue.trim();
-        const hasFiles = !isVoice && stagedFiles.length > 0;
+        const filePaths = isSupplied
+            ? (options?.attachedFiles ?? [])
+            : stagedFiles.map(f => f.filePath);
+        const hasFiles = filePaths.length > 0;
 
         // Allow sending with only files (no text)
         if (!messageText && hasFiles) {
@@ -1679,12 +1801,11 @@ const App = () => {
         if (!messageText) return;
 
         // Build the full message with file paths for the agent
-        const fileSuffix = hasFiles ? formatAttachedFilesMessage(stagedFiles) : '';
-        const fullMessage = messageText + fileSuffix;
-        const fileNames = hasFiles ? stagedFiles.map(f => f.fileName) : undefined;
+        const fullMessage = messageText + formatAttachedFilesBlock(filePaths);
+        const attachedFiles = hasFiles ? filePaths : undefined;
 
-        // Don't clear the user's typed draft when the message came from voice.
-        if (!isVoice) {
+        // Don't clear the user's typed draft when the text came from elsewhere.
+        if (!isSupplied) {
             setInput("");
             clearFiles();
         }
@@ -1694,7 +1815,7 @@ const App = () => {
         const clientMessageId = generateUUID();
         const runId = generateUUID();
         // Show only the user's typed text in the UI (not the <attached_files> block)
-        const userMsg: Message = { id: clientMessageId, stableId: clientMessageId, role: 'user', content: messageText, attachedFiles: fileNames };
+        const userMsg: Message = { id: clientMessageId, stableId: clientMessageId, role: 'user', content: messageText, attachedFiles, createdAt: new Date().toISOString() };
         const chatModelId = getChatModelIdForRun(conversationId);
 
         setCurrentPage('chat');
@@ -1719,9 +1840,7 @@ const App = () => {
     sendMessageRef.current = sendMessage;
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            // On mobile/touch devices, let Enter create a newline (user taps send button instead)
-            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return;
+        if (e.key === 'Enter' && !e.shiftKey && !IS_TOUCH) {
             e.preventDefault();
             sendMessage();
         }
@@ -1740,8 +1859,7 @@ const App = () => {
         }
         if (!userMsg) return;
 
-        const fileSuffix = formatAttachedFilesMessage(stagedFiles);
-        const fullMessage = userMsg + fileSuffix;
+        const fullMessage = userMsg + formatAttachedFilesBlock(stagedFiles.map(f => f.filePath));
 
         setInput("");
         clearFiles();
@@ -1834,6 +1952,8 @@ const App = () => {
                         onGoHome={goToHomePage}
                     />
 
+                    <PullToRefresh onRefresh={() => window.location.reload()} />
+
                     {currentPage === 'home' && (
                         <HomePage
                             activeTasks={getActiveTasks()}
@@ -1868,7 +1988,7 @@ const App = () => {
                     )}
                     {currentPage === 'chat' && (
                         <ErrorBoundary>
-                            <MessageList messages={messages} conversationId={conversationId} platformFrontendUrl={platformFrontendUrl} onDeleteMessage={deleteMessage} onBillingContinue={handleBillingContinue} onBillingDismiss={handleBillingDismiss} onAuthSignIn={handleAuthSignIn} onAuthDismiss={handleAuthDismiss} onRunErrorDismiss={handleRunErrorDismiss} userFirstName={userName?.split(' ')[0] ?? authStatus?.user?.name?.split(' ')[0]} hasInput={input.trim().length > 0} isProcessing={isProcessing} zoom={mainViewZoom} />
+                            <MessageList messages={messages} conversationId={conversationId} platformFrontendUrl={platformFrontendUrl} onDeleteMessage={deleteMessage} onEditMessage={editMessage} onForkConversation={forkConversationFrom} onBillingContinue={handleBillingContinue} onBillingDismiss={handleBillingDismiss} onAuthSignIn={handleAuthSignIn} onAuthDismiss={handleAuthDismiss} onRunErrorDismiss={handleRunErrorDismiss} userFirstName={userName?.split(' ')[0] ?? authStatus?.user?.name?.split(' ')[0]} hasInput={input.trim().length > 0} isProcessing={isProcessing} zoom={mainViewZoom} />
                         </ErrorBoundary>
                     )}
 

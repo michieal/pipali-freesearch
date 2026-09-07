@@ -40,6 +40,22 @@ export const VOICE_TUNABLES = {
     speakingEnergyThreshold: 0.04,
     /** Gain Pipali's speech ducks to while a suspected barge-in is transcribed. */
     duckGain: 0.15,
+    /**
+     * How far ahead of the speaker TTS playback schedules. Audio arrives over
+     * the network a chunk at a time, so this lead is the jitter budget: late
+     * arrivals are absorbed by it instead of landing as a silence gap mid-word.
+     * Spent lead is only rebuilt after a real underrun, so the cost is paid once
+     * per readout — inaudible next to synthesis latency.
+     */
+    speechLeadMs: 200,
+    /** Lead below which the buffer counts as spent and playback re-leads. */
+    speechMinLeadMs: 20,
+    /**
+     * Minimum audio per scheduled buffer. A phone's HTTP chunks carry ~30ms of
+     * speech each; coalescing them means fewer buffer boundaries, and each
+     * boundary is a chance to glitch.
+     */
+    speechBlockMs: 100,
     /** Share of an utterance's word pairs Pipali must be saying for it to read as echo. */
     selfEchoBigramRatio: 0.6,
     /** How long after Pipali finishes speaking that bare speech counts as the reply. */
@@ -63,6 +79,9 @@ export const VOICE_TUNABLES = {
  * soon as it's ready. Listening behavior is identical in both.
  */
 export type VoiceMode = 'off' | 'ask_first' | 'speak_freely';
+
+/** Spoken voice preset; the platform maps it to a provider-specific voice. */
+export type VoiceGender = 'female' | 'male';
 
 /**
  * Where a live voice session is in its cycle. `dormant` is the mic off after an

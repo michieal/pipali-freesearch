@@ -6,7 +6,7 @@
  */
 
 import type { User } from '../db/schema';
-import type { ConfirmationPreferences, ConfirmationContext } from '../processor/confirmation';
+import type { ConfirmationPreferences, ConfirmationContext, ConfirmationPersistence } from '../processor/confirmation';
 import type { QueuedMessage, StopReason } from '../routes/ws/message-types';
 import { type ConversationEventBus, type RunHandle, createRunHandle } from './conversation-event-bus';
 import { runResearchWithConversation, ResearchPausedError } from '../processor/research-runner';
@@ -23,6 +23,7 @@ import { setSessionActive, setSessionInactive, updateSessionReasoning } from '..
 import { createConfirmationCallback } from '../routes/ws/confirmation-manager';
 import { createChildLogger } from '../logger';
 import { getServer } from '../server-instance';
+import { pushRunComplete } from '../push';
 
 const log = createChildLogger({ component: 'run-executor' });
 
@@ -36,8 +37,8 @@ export interface ExecuteRunOptions {
     confirmationPreferences: ConfirmationPreferences;
     chatModelId?: number;
     chatModelAlias?: string;
-    /** Override the confirmation context (e.g., for automation hybrid confirmations) */
-    confirmationContextOverride?: ConfirmationContext;
+    /** Record this run's confirmations so they outlive the socket carrying them (automations) */
+    confirmationPersistence?: ConfirmationPersistence;
 }
 
 /**
@@ -146,7 +147,7 @@ async function persistUserMessage(
  * Handles queued messages by looping internally.
  */
 export async function executeRun(options: ExecuteRunOptions): Promise<void> {
-    const { bus, conversationId, user, confirmationPreferences, confirmationContextOverride } = options;
+    const { bus, conversationId, user, confirmationPreferences, confirmationPersistence } = options;
     let userMessage: string | undefined = options.userMessage;
     let runId = options.runId;
     let clientMessageId = options.clientMessageId;
@@ -205,8 +206,8 @@ export async function executeRun(options: ExecuteRunOptions): Promise<void> {
             userMessage = undefined;
         }
 
-        const confirmationContext: ConfirmationContext = confirmationContextOverride ?? {
-            requestConfirmation: createConfirmationCallback(bus, conversationId, runHandle),
+        const confirmationContext: ConfirmationContext = {
+            requestConfirmation: createConfirmationCallback(bus, conversationId, runHandle, confirmationPersistence),
             preferences: confirmationPreferences,
         };
 
@@ -229,12 +230,21 @@ export async function executeRun(options: ExecuteRunOptions): Promise<void> {
                 // Claimed, not copied: what a run leaves unclaimed is what wakes the
                 // conversation once it settles (see parent-inbox).
                 drainInjectedSteps: () => runHandle.injectedSteps.splice(0),
-                onTextDelta: (delta) => {
+                onStreamEvent: (event) => {
+                    if (event.kind === 'tool_call') {
+                        bus.publish({
+                            type: 'tool_call_progress',
+                            conversationId,
+                            runId: runIdAuthoritative,
+                            data: { callId: event.callId, name: event.name, argChars: event.argChars },
+                        });
+                        return;
+                    }
                     bus.publish({
-                        type: 'text_delta',
+                        type: event.kind === 'reasoning' ? 'reasoning_delta' : 'text_delta',
                         conversationId,
                         runId: runIdAuthoritative,
-                        data: { delta },
+                        data: { delta: event.delta },
                     });
                 },
             });
@@ -331,6 +341,10 @@ export async function executeRun(options: ExecuteRunOptions): Promise<void> {
 
             const result = iteratorResult!.value;
             if (result) {
+                // A sleeping phone drops its socket, so an empty bus is the signal that
+                // nobody saw this. Delegated tasks stay quiet: the conversation they
+                // report into announces itself.
+                const worthPushing = !bus.hasSubscribers() && conversationRole !== 'delegated';
                 bus.publish({
                     type: 'run_complete',
                     conversationId,
@@ -340,6 +354,7 @@ export async function executeRun(options: ExecuteRunOptions): Promise<void> {
                         stepId: result.stepId,
                     },
                 });
+                if (worthPushing && user) pushRunComplete(user.id, result.response, conversationId);
             }
 
             // Check if there are queued messages to process after completion

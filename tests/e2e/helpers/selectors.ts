@@ -10,6 +10,7 @@ export const Selectors = {
     mainContent: '.main-content',
     messagesContainer: '.messages-container',
     sidebar: '.sidebar',
+    pullRefreshIndicator: '.pull-refresh-indicator',
 
     // Input Area
     inputArea: '.input-area',
@@ -182,7 +183,7 @@ export const Selectors = {
     btnConfirmation: '.btn-confirmation',
 
     // Create Automation Modal
-    createAutomationModal: '.create-automation-modal',
+    createAutomationModal: '.automation-modal',
 
     // Toast Container (for automation confirmations)
     toastContainer: '.toast-container',

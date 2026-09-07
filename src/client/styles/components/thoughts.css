@@ -41,6 +41,11 @@
     font-weight: 500;
 }
 
+.thoughts-summary-count {
+    font-weight: 400;
+    color: var(--color-text-muted);
+}
+
 /* Header row: toggle button */
 .thoughts-header {
     display: flex;
@@ -91,6 +96,11 @@
     color: var(--color-execute-text);
 }
 
+.trail-icon--reasoning {
+    background: var(--color-bg-muted);
+    color: var(--color-text-muted);
+}
+
 .trail-icon--other {
     background: var(--color-bg-muted);
     color: var(--color-text-muted);
@@ -101,10 +111,19 @@
 }
 
 .trail-group-count {
+    /* Equal-width digits, so a ticking count redraws in place */
+    font-variant-numeric: tabular-nums;
     font-size: 11px;
     font-weight: 600;
     color: var(--color-text-secondary);
     min-width: 8px;
+}
+
+/* Run stopwatch, beside the trail of what the run did */
+.run-timer {
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
 }
 
 .thoughts-chevron {

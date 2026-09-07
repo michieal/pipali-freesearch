@@ -92,7 +92,8 @@
         "waitForTasks": "on {{tasks}}",
         "noRunInProgress": "No run was in progress.",
         "recalledMemories_one": "Recalled {{count}} memory.",
-        "recalledMemories_other": "Recalled {{count}} memories."
+        "recalledMemories_other": "Recalled {{count}} memories.",
+        "streamedArgs": "{{chars}} chars"
     },
     "voice": {
         "beta": "Beta",
@@ -115,6 +116,12 @@
             "spokenHint": "Say \"Pipali, speak freely\" or \"Pipali, ask first\" anytime"
         },
         "enabledHint": "While voice is on, speech near this device is transcribed to check whether you're addressing Pipali; unaddressed speech is discarded and never stored.",
+        "gender": {
+            "label": "Voice",
+            "hint": "How Pipali sounds when it reads aloud.",
+            "female": "Female",
+            "male": "Male"
+        },
         "status": {
             "idle": "Listening for \"Pipali…\" — tap to talk",
             "dormant": "Voice asleep — tap to wake",
@@ -129,7 +136,7 @@
             "dormant": "Voice is asleep — tap the mic to wake it",
             "goAheadPending": "Pipali has something for you — say \"Pipali, go ahead\"",
             "goAheadResult": "Your results are ready — say \"Pipali, go ahead\" to hear them",
-            "speaking": "Just talk to cut in — or say \"stop\" for quiet",
+            "speaking": "Say \"Pipali…\" to cut in — or \"Pipali, stop\" for quiet",
             "listening": "Say \"send it\" when you're done, \"scratch that\" to redo",
             "listeningDecision": "Say \"yes\", \"no\", or give your own instructions",
             "listeningQuestion": "Answer out loud — say \"send it\" when you're done"
@@ -294,7 +301,19 @@
         "questionFromPipali": "Question from Pipali",
         "actionRequired": "Action Required",
         "taskComplete": "Task Complete",
-        "taskFinished": "Your task has finished"
+        "taskFinished": "Your task has finished",
+        "push": {
+            "title": "Phone notifications",
+            "description": "Be told when Pipali finishes or needs your approval, even with the app closed.",
+            "unsupported": "This browser can't receive notifications. On iPhone, open Pipali in Safari and add it to your Home Screen first. A secure (https) connection is required.",
+            "denied": "Notifications are blocked for this site. Allow them in your browser settings, then try again.",
+            "failed": "Could not turn on notifications.",
+            "devices": "Devices getting notified",
+            "noDevices": "No devices yet. Turn this on wherever you want to be reached.",
+            "never": "Not notified yet",
+            "lastNotified": "Last notified {{when}}",
+            "remove": "Stop notifying this device"
+        }
     },
     "settings": {
         "title": "Settings",
@@ -398,6 +417,9 @@
         "instructionsSubtitle": "What do you want Pipali to do?",
         "instructionsPlaceholder": "Create a summary of the latest news about AI in healthcare.",
         "schedule": "Schedule",
+        "model": "Model",
+        "defaultModel": "My default model ({{model}})",
+        "defaultModelUnknown": "My default model",
         "scheduleHint": "(Optional - run on a recurring schedule)",
         "every": "Every",
         "frequencyHour": "Hour",
@@ -620,6 +642,11 @@
     },
     "messages": {
         "deleteMessage": "Delete message",
+        "copyMessage": "Copy message",
+        "editMessage": "Edit message",
+        "forkConversation": "Fork conversation from here",
+        "forkedTitle": "Fork: {{title}}",
+        "resend": "Resend",
         "pleaseLookAtFiles": "Please look at the attached files.",
         "queued": "Queued"
     }

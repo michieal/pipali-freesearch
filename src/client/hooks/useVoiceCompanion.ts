@@ -9,8 +9,9 @@
  * Contexts decide what bare (unaddressed) speech means. Every closed segment
  * falls into exactly one, checked in this order (see handleSegment):
  * - *engaged* — a turn is open, so the speech belongs to it.
- * - *barge-in* over Pipali's speech — it takes the floor: playback stops and
- *   a reply turn opens, once the transcript has cleared the self-echo check.
+ * - *barge-in* over Pipali's speech — addressed speech takes the floor:
+ *   playback stops and a reply turn opens. Bare speech is ambient (someone
+ *   else in the room, our own echo) and the readout carries on.
  * - *open* (the session default) — it means nothing unless it starts with the
  *   addressing phrase ("Pipali, ..."); the rest is ambient and discarded.
  *
@@ -24,7 +25,7 @@
  *    A polite, low-interruption mode when user is auditorily engaged elsewhere.
  * - `speak_freely`: speaks when it wants — the same chime, then it reads on.
  *    A standing consent for when user is auditorily available.
- * Pipali can always be interrupted - while it is working or speaking.
+ * Pipali can always be interrupted while it is working or speaking.
  * Modes switch at any moment, decoupled from companion state: spoken ("Pipali,
  * speak freely" / "ask first" / "stop listening") in every parser context, or via UI.
  *
@@ -44,8 +45,9 @@ import { CONFIRMATION_OPTIONS } from '../../server/processor/confirmation/confir
 import { isVoiceCaptureSupported, transcribeAudio, startSpeech, summarizeForSpeech, type SpeechHandle } from '../utils/voice/voice-audio';
 import { SegmentedCapture, type CapturedSegment } from '../utils/voice/voice-capture';
 import { TurnTranscript, isHallucination, isSelfEcho, isImplausibleSpeechRate } from '../utils/voice/voice-turn';
-import { VOICE_TUNABLES, STT_BIAS_PROMPT, type VoiceMode, type VoiceStatus } from '../utils/voice/voice-config';
+import { VOICE_TUNABLES, STT_BIAS_PROMPT, type VoiceGender, type VoiceMode, type VoiceStatus } from '../utils/voice/voice-config';
 import { playVoiceCue, playTranscriptTicks, speakPcm, stopSpeaking, duckSpeech, voiceCueDurationMs, type VoiceCueProfile } from '../utils/notifications';
+import { keepScreenAwake, releaseScreenAwake } from '../utils/wake-lock';
 import { parseConfirmationIntent, parseAddressing, parseStopWork, routeOpenVoice } from '../utils/voice/voice-intent';
 import { buildConfirmationSummary, buildConfirmationDetail, buildCompletionSummary } from '../utils/voice/voice-summary';
 
@@ -86,6 +88,7 @@ interface ActiveTurn {
 
 export interface UseVoiceCompanionParams {
     mode: VoiceMode;
+    voice?: VoiceGender;
     activeConversationId: string | undefined;
     sendMessage: (text: string, conversationId?: string) => void;
     respondToConfirmation: (conversationId: string, runId: string, requestId: string, optionId: string, guidance?: string) => void;
@@ -269,6 +272,9 @@ export function useVoiceCompanion(params: UseVoiceCompanionParams) {
         const capture = captureRef.current;
         captureRef.current = null;
         capture?.stop();
+        // A locked screen suspends microphone capture, so the display is held only
+        // while we are actually listening — dormancy and mode-off both land here.
+        if (capture) releaseScreenAwake();
         if (withCue && capture) playVoiceCue('session_end');
     }, [clearInviteTimer, clearIdleTimer, interruptSpeaking, releaseTurn]);
 
@@ -299,6 +305,7 @@ export function useVoiceCompanion(params: UseVoiceCompanionParams) {
         }
         if (sessionTokenRef.current !== token) { capture.stop(); return; }
         captureRef.current = capture;
+        keepScreenAwake();
         playVoiceCue('session_start');
         setStatus(pendingRef.current && !pendingRef.current.heard ? 'announced' : 'idle');
         markAddressed();
@@ -399,7 +406,7 @@ export function useVoiceCompanion(params: UseVoiceCompanionParams) {
         await speakThenListen(pending.summary, () => {
             const cached = prefetchRef.current.get(pending.key);
             prefetchRef.current.delete(pending.key);
-            return cached ?? startSpeech(pending.summary);
+            return cached ?? startSpeech(pending.summary, { voice: cbRef.current.voice });
         });
     }, [speakThenListen]);
 
@@ -422,7 +429,7 @@ export function useVoiceCompanion(params: UseVoiceCompanionParams) {
     /** Short spoken confirmation that doesn't invite a reply (unlike speakThenListen). */
     const speakAck = useCallback(async (text: string) => {
         const generation = ++speechGenerationRef.current;
-        const speech = startSpeech(text);
+        const speech = startSpeech(text, { voice: cbRef.current.voice });
         activeSpeechRef.current.add(speech);
         setStatus('speaking');
         beginSpeaking(text);
@@ -513,7 +520,7 @@ export function useVoiceCompanion(params: UseVoiceCompanionParams) {
                 }
             }
             return pending.summary;
-        })());
+        })(), { voice: cbRef.current.voice });
         handle.ready.catch((err: unknown) => {
             // A cancelled prefetch (superseded, dismissed, session end) is not a failure.
             if ((err as { name?: string })?.name === 'AbortError') return;
@@ -818,10 +825,9 @@ export function useVoiceCompanion(params: UseVoiceCompanionParams) {
     }, [transcribeSegment, markAddressed, runSpokenCommand, speakPendingAndListen, openReplyTurn, openComposedTurn, beginTurn]);
 
     /**
-     * Speech captured while Pipali is talking (full duplex only). Playback has
-     * already ducked on onset; this decides whether that was the user taking the
-     * floor — in which case Pipali stops and the utterance opens a reply — or
-     * Pipali's own voice leaking past the echo guard, and it resumes.
+     * Speech captured while Pipali is talking. Playback has already ducked on onset;
+     * this decides whether that was the user taking the floor. If speech was addressed
+     * to Pipali, it stops speaking and opens a reply, otherwise the readout resumes.
      */
     const handleBargeInSegment = useCallback((segment: CapturedSegment) => {
         const { seq } = segment;
@@ -833,17 +839,22 @@ export function useVoiceCompanion(params: UseVoiceCompanionParams) {
                     if (speakingRef.current > 0) duckSpeech(false);   // false alarm — resume the readout
                     return;
                 }
-                markAddressed();
                 // The readout may have ended while this transcribed, in which
                 // case its reply turn is already open and owns the utterance.
                 const turn = turnRef.current;
                 if (turn) {
+                    markAddressed();
                     applyTurnText(turn, seq, text);
                     return;
                 }
-                stopSpeaking();
                 const addr = parseAddressing(text);
-                const payload = addr.addressed ? addr.payload : text;
+                if (!addr.addressed) {
+                    if (speakingRef.current > 0) duckSpeech(false);   // ambient speech — resume the readout
+                    return;
+                }
+                markAddressed();
+                stopSpeaking();
+                const { payload } = addr;
                 const pending = pendingRef.current;
                 if (!payload) {
                     openReplyTurn();          // bare "Pipali": floor taken, nothing said yet

@@ -92,7 +92,8 @@
         "waitForTasks": "{{tasks}}を待機",
         "noRunInProgress": "実行中のタスクはありませんでした。",
         "recalledMemories_one": "メモリを{{count}}件呼び出しました。",
-        "recalledMemories_other": "メモリを{{count}}件呼び出しました。"
+        "recalledMemories_other": "メモリを{{count}}件呼び出しました。",
+        "streamedArgs": "{{chars}} 文字"
     },
     "home": {
         "greetings": {
@@ -253,7 +254,19 @@
         "questionFromPipali": "Pipaliからの質問",
         "actionRequired": "対応が必要です",
         "taskComplete": "タスク完了",
-        "taskFinished": "タスクが完了しました"
+        "taskFinished": "タスクが完了しました",
+        "push": {
+            "title": "スマホへの通知",
+            "description": "アプリを閉じていても、Pipali の完了や確認依頼をお知らせします。",
+            "unsupported": "このブラウザは通知を受け取れません。iPhone では Safari で Pipali を開き、ホーム画面に追加してください。安全な (https) 接続が必要です。",
+            "denied": "このサイトの通知がブロックされています。ブラウザの設定で許可してからもう一度お試しください。",
+            "failed": "通知を有効にできませんでした。",
+            "devices": "通知先のデバイス",
+            "noDevices": "デバイスがありません。連絡を受けたい端末で有効にしてください。",
+            "never": "未通知",
+            "lastNotified": "最終通知 {{when}}",
+            "remove": "このデバイスへの通知を停止"
+        }
     },
     "voice": {
         "beta": "ベータ",
@@ -276,6 +289,12 @@
             "spokenHint": "いつでも「Pipali, speak freely」または「Pipali, ask first」と言えます"
         },
         "enabledHint": "音声モードが有効な間、この端末の近くの音声は、Pipaliへの呼びかけかどうかを確認するために文字起こしされます。呼びかけでない音声は破棄され、保存されることはありません。",
+        "gender": {
+            "label": "声",
+            "hint": "Pipaliが読み上げるときの声。",
+            "female": "女性",
+            "male": "男性"
+        },
         "status": {
             "idle": "「Pipali…」の呼びかけを待機中 — タップして話す",
             "dormant": "音声モードは休止中 — タップして再開",
@@ -290,7 +309,7 @@
             "dormant": "音声モードは休止中 — マイクをタップして再開",
             "goAheadPending": "Pipaliからお知らせがあります — 「Pipali, go ahead」と言ってください",
             "goAheadResult": "結果ができました — 「Pipali, go ahead」で読み上げます",
-            "speaking": "そのまま話すと割り込めます — 「stop」で停止",
+            "speaking": "「Pipali…」と言うと割り込めます — 「Pipali, stop」で停止",
             "listening": "終わったら「send it」、やり直すなら「scratch that」",
             "listeningDecision": "「yes」「no」、または自由に指示してください",
             "listeningQuestion": "声で答えてください — 終わったら「send it」"
@@ -398,6 +417,9 @@
         "instructionsSubtitle": "Pipaliに何をさせますか？",
         "instructionsPlaceholder": "医療分野のAIに関する最新ニュースの要約を作成してください。",
         "schedule": "スケジュール",
+        "model": "モデル",
+        "defaultModel": "既定のモデル ({{model}})",
+        "defaultModelUnknown": "既定のモデル",
         "scheduleHint": "（任意 - 繰り返しスケジュールで実行）",
         "every": "毎",
         "frequencyHour": "時間",
@@ -620,6 +642,11 @@
     },
     "messages": {
         "deleteMessage": "メッセージを削除",
+        "copyMessage": "メッセージをコピー",
+        "editMessage": "メッセージを編集",
+        "forkConversation": "ここから会話を分岐",
+        "forkedTitle": "分岐: {{title}}",
+        "resend": "再送信",
         "pleaseLookAtFiles": "添付ファイルを確認してください。",
         "queued": "キュー待ち"
     }

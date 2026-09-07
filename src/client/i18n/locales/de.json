@@ -92,7 +92,8 @@
         "waitForTasks": "auf {{tasks}}",
         "noRunInProgress": "Es wurde keine Aufgabe ausgeführt.",
         "recalledMemories_one": "{{count}} Erinnerung abgerufen.",
-        "recalledMemories_other": "{{count}} Erinnerungen abgerufen."
+        "recalledMemories_other": "{{count}} Erinnerungen abgerufen.",
+        "streamedArgs": "{{chars}} Zeichen"
     },
     "home": {
         "greetings": {
@@ -253,7 +254,19 @@
         "questionFromPipali": "Frage von Pipali",
         "actionRequired": "Aktion erforderlich",
         "taskComplete": "Task abgeschlossen",
-        "taskFinished": "Dein Task wurde abgeschlossen"
+        "taskFinished": "Dein Task wurde abgeschlossen",
+        "push": {
+            "title": "Benachrichtigungen auf dem Handy",
+            "description": "Erfahre, wenn Pipali fertig ist oder deine Zustimmung braucht – auch bei geschlossener App.",
+            "unsupported": "Dieser Browser kann keine Benachrichtigungen empfangen. Öffne Pipali auf dem iPhone in Safari und füge es zum Home-Bildschirm hinzu. Eine sichere (https) Verbindung ist erforderlich.",
+            "denied": "Benachrichtigungen sind für diese Seite blockiert. Erlaube sie in den Browsereinstellungen und versuche es erneut.",
+            "failed": "Benachrichtigungen konnten nicht aktiviert werden.",
+            "devices": "Benachrichtigte Geräte",
+            "noDevices": "Noch keine Geräte. Aktiviere dies überall dort, wo du erreichbar sein willst.",
+            "never": "Noch nicht benachrichtigt",
+            "lastNotified": "Zuletzt benachrichtigt {{when}}",
+            "remove": "Dieses Gerät nicht mehr benachrichtigen"
+        }
     },
     "voice": {
         "beta": "Beta",
@@ -276,6 +289,12 @@
             "spokenHint": "Sage jederzeit \"Pipali, speak freely\" oder \"Pipali, ask first\""
         },
         "enabledHint": "Solange der Sprachmodus aktiv ist, wird Sprache in der Nähe dieses Geräts transkribiert, um zu prüfen, ob du Pipali ansprichst; nicht adressierte Sprache wird verworfen und nie gespeichert.",
+        "gender": {
+            "label": "Stimme",
+            "hint": "Wie Pipali klingt, wenn es vorliest.",
+            "female": "Weiblich",
+            "male": "Männlich"
+        },
         "status": {
             "idle": "Wartet auf \"Pipali…\" – zum Sprechen tippen",
             "dormant": "Sprachmodus schläft – zum Aufwecken tippen",
@@ -290,7 +309,7 @@
             "dormant": "Sprachmodus schläft – tippe auf das Mikrofon zum Aufwecken",
             "goAheadPending": "Pipali hat etwas für dich – sage \"Pipali, go ahead\"",
             "goAheadResult": "Deine Ergebnisse sind fertig – sage \"Pipali, go ahead\" zum Anhören",
-            "speaking": "Sprich einfach los, um zu unterbrechen – oder sage \"stop\" für Ruhe",
+            "speaking": "Sage \"Pipali…\", um zu unterbrechen – oder \"Pipali, stop\" für Ruhe",
             "listening": "Sage \"send it\", wenn du fertig bist, \"scratch that\" zum Neuanfangen",
             "listeningDecision": "Sage \"yes\", \"no\" oder gib eigene Anweisungen",
             "listeningQuestion": "Antworte laut – sage \"send it\", wenn du fertig bist"
@@ -398,6 +417,9 @@
         "instructionsSubtitle": "Was soll Pipali tun?",
         "instructionsPlaceholder": "Erstelle eine Zusammenfassung der neuesten Nachrichten über KI im Gesundheitswesen.",
         "schedule": "Zeitplan",
+        "model": "Modell",
+        "defaultModel": "Mein Standardmodell ({{model}})",
+        "defaultModelUnknown": "Mein Standardmodell",
         "scheduleHint": "(Optional - nach wiederkehrendem Zeitplan ausführen)",
         "every": "Jede",
         "frequencyHour": "Stunde",
@@ -620,6 +642,11 @@
     },
     "messages": {
         "deleteMessage": "Nachricht löschen",
+        "copyMessage": "Nachricht kopieren",
+        "editMessage": "Nachricht bearbeiten",
+        "forkConversation": "Unterhaltung ab hier verzweigen",
+        "forkedTitle": "Verzweigung: {{title}}",
+        "resend": "Erneut senden",
         "pleaseLookAtFiles": "Bitte schau dir die angehängten Dateien an.",
         "queued": "In Warteschlange"
     }

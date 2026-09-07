@@ -92,7 +92,8 @@
         "waitForTasks": "等待{{tasks}}",
         "noRunInProgress": "没有正在运行的任务。",
         "recalledMemories_one": "已调用 {{count}} 条记忆。",
-        "recalledMemories_other": "已调用 {{count}} 条记忆。"
+        "recalledMemories_other": "已调用 {{count}} 条记忆。",
+        "streamedArgs": "{{chars}} 个字符"
     },
     "home": {
         "greetings": {
@@ -253,7 +254,19 @@
         "questionFromPipali": "来自 Pipali 的问题",
         "actionRequired": "需要操作",
         "taskComplete": "任务完成",
-        "taskFinished": "你的任务已完成"
+        "taskFinished": "你的任务已完成",
+        "push": {
+            "title": "手机通知",
+            "description": "即使应用已关闭，也能在 Pipali 完成任务或需要你确认时收到提醒。",
+            "unsupported": "此浏览器无法接收通知。在 iPhone 上请用 Safari 打开 Pipali 并添加到主屏幕。需要安全 (https) 连接。",
+            "denied": "此站点的通知已被阻止。请在浏览器设置中允许后重试。",
+            "failed": "无法开启通知。",
+            "devices": "接收通知的设备",
+            "noDevices": "还没有设备。在你希望被联系到的设备上开启。",
+            "never": "尚未通知",
+            "lastNotified": "上次通知 {{when}}",
+            "remove": "停止通知此设备"
+        }
     },
     "voice": {
         "beta": "测试版",
@@ -276,6 +289,12 @@
             "spokenHint": "随时可以说 \"Pipali, speak freely\" 或 \"Pipali, ask first\""
         },
         "enabledHint": "语音模式开启期间，设备附近的语音会被转写，以判断你是否在呼唤 Pipali；未呼唤 Pipali 的语音会被丢弃，绝不存储。",
+        "gender": {
+            "label": "声音",
+            "hint": "Pipali 朗读时使用的声音。",
+            "female": "女声",
+            "male": "男声"
+        },
         "status": {
             "idle": "等待 \"Pipali…\" 唤醒——点按说话",
             "dormant": "语音已休眠——点按唤醒",
@@ -290,7 +309,7 @@
             "dormant": "语音已休眠——点击麦克风唤醒",
             "goAheadPending": "Pipali 有事要告诉你——说 \"Pipali, go ahead\"",
             "goAheadResult": "结果已就绪——说 \"Pipali, go ahead\" 收听",
-            "speaking": "直接说话即可打断——或说 \"stop\" 让它安静",
+            "speaking": "说 \"Pipali…\" 即可打断——或说 \"Pipali, stop\" 让它安静",
             "listening": "说完后说 \"send it\"，想重说就说 \"scratch that\"",
             "listeningDecision": "说 \"yes\"、\"no\"，或给出你自己的指示",
             "listeningQuestion": "直接说出答案——说完后说 \"send it\""
@@ -398,6 +417,9 @@
         "instructionsSubtitle": "你希望 Pipali 做什么？",
         "instructionsPlaceholder": "创建关于医疗保健领域 AI 最新新闻的摘要。",
         "schedule": "计划",
+        "model": "模型",
+        "defaultModel": "我的默认模型 ({{model}})",
+        "defaultModelUnknown": "我的默认模型",
         "scheduleHint": "（可选 - 按周期计划运行）",
         "every": "每",
         "frequencyHour": "小时",
@@ -620,6 +642,11 @@
     },
     "messages": {
         "deleteMessage": "删除消息",
+        "copyMessage": "复制消息",
+        "editMessage": "编辑消息",
+        "forkConversation": "从此处分叉对话",
+        "forkedTitle": "分叉：{{title}}",
+        "resend": "重新发送",
         "pleaseLookAtFiles": "请查看附件。",
         "queued": "排队中"
     }
