@@ -42,18 +42,56 @@ export async function sendMessageToGpt(
         ...(Object.keys(tracer).length > 0 && { metadata: tracer }),
     };
 
-<<<<<<< HEAD
     // Use streaming to avoid timeout issues. If the OpenAI response stream
     // cannot be accumulated because the response contains a missing content
-    // index, retry the exact same request without streaming. This can happen
-    // when a new conversation has no usable content/history yet.
+    // index, retry the exact same request without streaming.
     let response: Responses.Response;
+
     try {
         const stream = client.responses.stream(request);
 
-        if (onTextChunk) {
+        if (onStreamEvent) {
             stream.on('response.output_text.delta', (event) => {
-                onTextChunk(event.delta);
+                onStreamEvent({ kind: 'text', delta: event.delta });
+            });
+
+            stream.on('response.reasoning_summary_text.delta', (event) => {
+                onStreamEvent({ kind: 'reasoning', delta: event.delta });
+            });
+
+            // ...
+        }
+
+        if (onStreamEvent) {
+            // Keyed by output item id, so argument chunks can be attributed to a call
+            const streamedToolCalls = new Map<string, { callId: string; name: string; argChars: number }>();
+
+            stream.on('response.output_text.delta', (event) => {
+                onStreamEvent({kind: 'text', delta: event.delta});
+            });
+
+            stream.on('response.reasoning_summary_text.delta', (event) => {
+                onStreamEvent({kind: 'reasoning', delta: event.delta});
+            });
+
+            // Cast: a namespaced tool call carries a `namespace` the SDK's type omits
+            stream.on('response.output_item.added', (event) => {
+                const item = event.item as any;
+                if (item.type !== 'function_call') return;
+                // The two ids differ on OpenAI proper (fc_… vs call_…): argument chunks
+                // arrive keyed by the item id, while the app routes calls by call_id
+                const itemId = item.id ?? item.call_id;
+                if (!itemId) return;
+                const call = {callId: item.call_id ?? itemId, name: getFunctionCallName(item), argChars: 0};
+                streamedToolCalls.set(itemId, call);
+                onStreamEvent({kind: 'tool_call', ...call});
+            });
+
+            stream.on('response.function_call_arguments.delta', (event) => {
+                const call = streamedToolCalls.get(event.item_id);
+                if (!call) return;
+                call.argChars += event.delta.length;
+                onStreamEvent({kind: 'tool_call', ...call});
             });
         }
 
@@ -65,43 +103,14 @@ export async function sendMessageToGpt(
             throw error;
         }
 
-        log.warn({ err: error }, 'OpenAI response stream reported missing content; retrying without streaming');
+        log.warn(
+            {err: error},
+            'OpenAI response stream reported missing content; retrying without streaming'
+        );
+
         response = await client.responses.create(request);
-=======
-    if (onStreamEvent) {
-        // Keyed by output item id, so argument chunks can be attributed to a call
-        const streamedToolCalls = new Map<string, { callId: string; name: string; argChars: number }>();
-
-        stream.on('response.output_text.delta', (event) => {
-            onStreamEvent({ kind: 'text', delta: event.delta });
-        });
-
-        stream.on('response.reasoning_summary_text.delta', (event) => {
-            onStreamEvent({ kind: 'reasoning', delta: event.delta });
-        });
-
-        // Cast: a namespaced tool call carries a `namespace` the SDK's type omits
-        stream.on('response.output_item.added', (event) => {
-            const item = event.item as any;
-            if (item.type !== 'function_call') return;
-            // The two ids differ on OpenAI proper (fc_… vs call_…): argument chunks
-            // arrive keyed by the item id, while the app routes calls by call_id
-            const itemId = item.id ?? item.call_id;
-            if (!itemId) return;
-            const call = { callId: item.call_id ?? itemId, name: getFunctionCallName(item), argChars: 0 };
-            streamedToolCalls.set(itemId, call);
-            onStreamEvent({ kind: 'tool_call', ...call });
-        });
-
-        stream.on('response.function_call_arguments.delta', (event) => {
-            const call = streamedToolCalls.get(event.item_id);
-            if (!call) return;
-            call.argChars += event.delta.length;
-            onStreamEvent({ kind: 'tool_call', ...call });
-        });
->>>>>>> upstream/main
     }
-
+    
     if (!response) {
         throw new Error('No response received from model');
     }
