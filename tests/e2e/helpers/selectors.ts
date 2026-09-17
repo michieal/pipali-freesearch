@@ -30,6 +30,10 @@ export const Selectors = {
     messageContent: '.message-content',
     messageActions: '.message-actions',
     messageActionBtn: '.message-action-btn',
+    messageActionCopy: '.message-action-btn.copy',
+    messageActionEdit: '.message-action-btn.edit',
+    messageActionFork: '.message-action-btn.fork',
+    messageActionDelete: '.message-action-btn.delete',
 
     // Thoughts / Train of Thought
     thoughtsSection: '.thoughts-section',
@@ -39,6 +43,16 @@ export const Selectors = {
     thoughtItem: '.thought-item',
     thoughtStep: '.thought-step',
     thoughtTool: '.thought-tool',
+
+    // File Viewer
+    fileViewer: '.file-viewer',
+    fileViewerName: '.file-viewer-name',
+    fileViewerFrame: '.file-viewer-frame',
+    fileViewerSource: '.file-viewer-source',
+    fileViewerGutter: '.file-viewer-gutter',
+    fileViewerMarkdown: '.file-viewer-markdown',
+    fileViewerFrontmatter: '.file-viewer-frontmatter',
+    fileViewerClose: '.file-viewer-close',
 
     // Home Page
     emptyState: '.empty-state',
