@@ -396,11 +396,13 @@ export function fileViewerScenario(): MockScenario {
                 ],
             },
         ],
-        // export.md is not written here: the spec writes it, at a size no tool call should carry
+        // export.md and brief.docx are not written here: the spec puts them in place, one at a
+        // size no tool call should carry and one binary
         finalResponse: `Saved the report to [report.html](file://${FILE_VIEWER_DIR}/report.html), `
             + `the script to [summarize.ts](file://${FILE_VIEWER_DIR}/summarize.ts), `
-            + `the notes to [notes.md](file://${FILE_VIEWER_DIR}/notes.md) `
-            + `and the export to [export.md](file://${FILE_VIEWER_DIR}/export.md).`,
+            + `the notes to [notes.md](file://${FILE_VIEWER_DIR}/notes.md), `
+            + `the export to [export.md](file://${FILE_VIEWER_DIR}/export.md) `
+            + `and the brief to [brief.docx](file://${FILE_VIEWER_DIR}/brief.docx).`,
     };
 }
 

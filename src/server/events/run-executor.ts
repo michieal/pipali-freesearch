@@ -103,10 +103,7 @@ async function ensureSystemPromptPersisted(
 
     const userContext = await loadUserContext();
     const { memoriesEnabled } = await loadMemorySettings(userId);
-    const now = new Date();
     const systemPrompt = await buildSystemPrompt({
-        currentDate: now.toLocaleDateString('en-CA'),
-        dayOfWeek: now.toLocaleDateString('en-US', { weekday: 'long' }),
         location: userContext.location,
         language: userContext.language,
         username: userContext.name,
@@ -117,7 +114,6 @@ async function ensureSystemPromptPersisted(
         // Only reached for a conversation without a system prompt, so this is its baseline
         memoryCatalogue: memoriesEnabled ? await loadCatalogue() : undefined,
         memoriesEnabled,
-        now,
     });
 
     await atifConversationService.addStep(conversationId, 'system', systemPrompt);

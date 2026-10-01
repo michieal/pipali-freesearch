@@ -25,6 +25,7 @@ import { loadMemorySettings } from '../memory/settings';
 import { memoryPathsExtra, resolveMemoryContext, surfacedMemories, MEMORY_RECALL_KIND } from '../memory';
 import { recallMemories } from '../memory/recall';
 import { resolveMcpInventoryContext } from './actor/search_tools';
+import { conversationStartedAt, resolveClockContext } from './clock';
 import { getMcpToolDefinitions } from './mcp';
 import type { ResearchIteration } from './director/types';
 import type { ATIFStep } from './conversation/atif/atif.types';
@@ -165,20 +166,29 @@ export async function* runResearchWithConversation(
         log.warn({ err: error, conversationId }, 'Failed to resolve MCP tool inventory changes');
     }
 
-    for (const step of [...systemSteps, ...mcpSteps]) {
-        const persistedStep = await atifConversationService.addStep(
-            conversationId,
-            'system',
-            step.message,
-            undefined, // no metrics
-            undefined, // no tool calls
-            undefined, // no observation
-            undefined, // no reasoning
-            undefined, // no raw
-            step.extra
-        )
-        trajectory.steps.push(persistedStep);
-    }
+    const persistSystemSteps = async (steps: Array<{ message: string; extra: Record<string, unknown> }>) => {
+        for (const step of steps) {
+            const persistedStep = await atifConversationService.addStep(
+                conversationId,
+                'system',
+                step.message,
+                undefined, // no metrics
+                undefined, // no tool calls
+                undefined, // no observation
+                undefined, // no reasoning
+                undefined, // no raw
+                step.extra
+            );
+            trajectory.steps.push(persistedStep);
+        }
+    };
+
+    // The clock goes first, so what follows reads as announced at that time
+    await persistSystemSteps([
+        ...resolveClockContext(trajectory.steps).systemSteps,
+        ...systemSteps,
+        ...mcpSteps,
+    ]);
 
     // For existing conversations, persist user message immediately.
     // For new conversations, we add to in-memory first, then persist after system prompt.
@@ -246,12 +256,15 @@ export async function* runResearchWithConversation(
     // Load user context for personalization
     const userContext = await loadUserContext();
 
+    // The prompt is rebuilt every iteration but states the conversation's start, so it
+    // stays a stable cache prefix while the clock steps carry the time since
+    const startedAt = conversationStartedAt(trajectory.steps) ?? new Date();
+
     // Run research loop
     for await (const iteration of research({
         chatHistory: trajectory,
         maxIterations,
-        currentDate: new Date().toLocaleDateString('en-CA'), // YYYY-MM-DD in local time
-        dayOfWeek: new Date().toLocaleDateString('en-US', { weekday: 'long' }),
+        startedAt,
         username: userContext.name,
         location: userContext.location,
         userContext: userContext.instructions,
@@ -407,6 +420,9 @@ export async function* runResearchWithConversation(
                 memoryPathsExtra(iteration.toolCalls),
             );
             trajectory.steps.push(agentStep);
+
+            // A long run crosses into a new time of day like a later turn does
+            await persistSystemSteps(resolveClockContext(trajectory.steps).systemSteps);
 
             // Include the step_id in the iteration for the client to use as message identifier
             const iterationWithStepId = { ...iteration, stepId: agentStep.step_id };

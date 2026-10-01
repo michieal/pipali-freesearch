@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { mkdir, realpath, rm, symlink, writeFile } from 'fs/promises';
+import { copyFile, mkdir, realpath, rm, symlink, writeFile } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import api from '../../../src/server/routes/api';
@@ -12,12 +12,14 @@ const textPath = path.join(dir, 'notes.txt');
 const htmlPath = path.join(dir, 'report.html');
 const binaryPath = path.join(dir, 'blob.bin');
 const hugePath = path.join(dir, 'huge.log');
+const docxPath = path.join(dir, 'brief.docx');
+const brokenDocxPath = path.join(dir, 'broken.docx');
 const escapingLinkPath = path.join(dir, 'hosts-link.png');
 // The working directory is the one place under $HOME a sandboxed test may write
 const cwdUnderHome = !path.relative(os.homedir(), process.cwd()).startsWith('..');
 const homeImagePath = path.join(process.cwd(), `.files-test-${crypto.randomUUID()}.png`);
 const homeTextPath = path.join(process.cwd(), `.files-test-${crypto.randomUUID()}.txt`);
-const created = [imagePath, textPath, htmlPath, binaryPath, hugePath, escapingLinkPath, homeImagePath, homeTextPath];
+const created = [imagePath, textPath, htmlPath, binaryPath, hugePath, docxPath, brokenDocxPath, escapingLinkPath, homeImagePath, homeTextPath];
 
 // The image route trusts the extension; the bytes only need to round-trip
 const PNG_HEADER = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
@@ -29,6 +31,8 @@ beforeAll(async () => {
     await writeFile(htmlPath, '<html><body><script>alert(1)</script></body></html>');
     await writeFile(binaryPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01]));
     await writeFile(hugePath, Buffer.alloc(MAX_CONTENT_BYTES + 1, 0x61));
+    await copyFile(path.resolve(import.meta.dir, '../../fixtures/brief.docx'), docxPath);
+    await writeFile(brokenDocxPath, 'not a zip, let alone a document');
     await symlink('/etc/hosts', escapingLinkPath);
     if (cwdUnderHome) {
         await writeFile(homeImagePath, PNG_HEADER);
@@ -136,5 +140,24 @@ describe('GET /api/files/content', () => {
     test('refuses binary content', async () => {
         const response = await api.fetch(contentRequest(binaryPath));
         expect(response.status).toBe(415);
+    });
+
+    test('serves a Word document as the HTML it converts to, under the same inert headers', async () => {
+        const response = await api.fetch(contentRequest(docxPath));
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
+        expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+        expect(response.headers.get('Content-Security-Policy')).toBe('sandbox');
+        const html = await response.text();
+        expect(html).toContain('<h1>Project brief</h1>');
+        expect(html).toContain('<strong>doubled</strong>');
+        expect(html).toContain('<a href="https://example.com/source">source data</a>');
+        expect(html).toContain('<td><p>Cohort</p></td>');
+    });
+
+    test('refuses a .docx it cannot read as a document', async () => {
+        const response = await api.fetch(contentRequest(brokenDocxPath));
+        expect(response.status).toBe(422);
     });
 });

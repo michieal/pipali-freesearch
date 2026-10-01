@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ExternalLink as ExternalLinkIcon, FileText, Loader2, RotateCw, X } from 'lucide-react';
+import { DocxFileView } from './DocxFileView';
 import { HtmlFileView } from './HtmlFileView';
 import { MarkdownFileView } from './MarkdownFileView';
 import { TextFileView } from './TextFileView';
@@ -107,6 +108,8 @@ export function FileViewerPanel({ path, revision, onClose }: FileViewerPanelProp
         switch (kind) {
             case 'html':
                 return <HtmlFileView html={state.text} title={filename} onOpenLink={openLink} />;
+            case 'docx':
+                return <DocxFileView html={state.text} title={filename} onOpenLink={openLink} />;
             case 'markdown':
                 return state.text.length > RICH_RENDER_MAX_CHARS
                     ? <TextFileView text={state.text} path={path} />

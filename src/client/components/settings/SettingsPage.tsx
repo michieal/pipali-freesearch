@@ -58,7 +58,7 @@ interface SettingsPageProps {
 
 export function SettingsPage({ onUserContextSaved }: SettingsPageProps) {
     const { t, i18n } = useTranslation();
-    const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+    const [activeTab, setActiveTab] = useState<SettingsTab>('permissions');
     const [name, setName] = useState('');
     const [location, setLocation] = useState('');
     const [instructions, setInstructions] = useState('');

@@ -91,6 +91,34 @@
     margin-top: 1px;
 }
 
+/* A condition outside the app's control, sitting a step below an error. */
+.settings-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    padding: 10px 12px;
+    background: var(--color-warning-bg);
+    border: 1px solid var(--color-warning-border);
+    border-radius: var(--radius-md);
+    color: var(--color-warning-text);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.settings-notice svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+/* Names the group of controls under it, the way the memory manager's header does. */
+.settings-subhead {
+    margin: 0 0 6px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+}
+
 /* Settings Section */
 .settings-section {
     background: var(--color-bg-elevated);
@@ -118,8 +146,29 @@
     margin-bottom: 0;
 }
 
-.settings-section-header .toggle-switch {
+/* Keeps a busy indicator on the same baseline as the control it belongs to. */
+.settings-section-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-top: 2px;
+}
+
+.settings-section-header > .toggle-switch {
+    margin-top: 2px;
+}
+
+/* One flow for everything a section shows below its header, so each state that
+   appears or disappears keeps the same rhythm. */
+.settings-section-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.settings-section-body > .settings-error {
+    margin-bottom: 0;
 }
 
 .settings-section-title {
@@ -330,6 +379,7 @@
     color: white;
 }
 
+.settings-empty,
 .memory-manager-empty,
 .memory-manager-error {
     display: flex;
@@ -337,11 +387,13 @@
     justify-content: center;
     gap: 6px;
     min-height: 44px;
+    margin: 0;
     padding: 8px;
     border: 1px dashed var(--color-border);
     border-radius: var(--radius-md);
     color: var(--color-text-muted);
     font-size: 12px;
+    text-align: center;
 }
 
 .memory-manager-error {
@@ -712,8 +764,9 @@
 
 /* Devices receiving push notifications */
 .settings-device-list {
-    margin-top: 8px;
     overflow: hidden;
+    margin: 0;
+    padding: 0;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     list-style: none;
@@ -732,19 +785,33 @@
     padding: 4px 6px 4px 12px;
 }
 
-.settings-device-label {
+.settings-device:hover {
+    background: var(--color-bg-muted);
+}
+
+/* Stacked, so a long device name and a long timestamp never compete for one line. */
+.settings-device-labels {
+    display: flex;
     flex: 1;
     min-width: 0;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.settings-device-label,
+.settings-device-meta {
     overflow: hidden;
-    color: var(--color-text);
-    font-size: 13px;
-    font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
+.settings-device-label {
+    color: var(--color-text);
+    font-size: 13px;
+    font-weight: 500;
+}
+
 .settings-device-meta {
-    flex-shrink: 0;
     color: var(--color-text-muted);
     font-size: 11px;
 }
@@ -761,6 +828,7 @@
     background: transparent;
     color: var(--color-text-muted);
     cursor: pointer;
+    transition: var(--transition);
 }
 
 .settings-device-remove:hover {
@@ -769,7 +837,6 @@
 }
 
 .settings-spinner {
-    margin-top: 8px;
     color: var(--color-text-muted);
     animation: spin 1s linear infinite;
 }

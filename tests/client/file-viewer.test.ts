@@ -14,6 +14,7 @@ describe('fileViewKind', () => {
         expect(fileViewKind('/Users/me/notes.md')).toBe('markdown');
         expect(fileViewKind('/Users/me/chart.png')).toBe('image');
         expect(fileViewKind('/Users/me/script.ts')).toBe('text');
+        expect(fileViewKind('/Users/me/brief.docx')).toBe('docx');
     });
 
     test('treats office text of any extension as text', () => {
@@ -29,6 +30,7 @@ describe('fileViewKind', () => {
 
     test('leaves documents with their own viewer, archives, media and folders to the system', () => {
         expect(fileViewKind('/Users/me/deck.pptx')).toBeNull();
+        expect(fileViewKind('/Users/me/legacy.doc')).toBeNull();
         expect(fileViewKind('/Users/me/paper.pdf')).toBeNull();
         expect(fileViewKind('/Users/me/backup.zip')).toBeNull();
         expect(fileViewKind('/Users/me/demo.mp4')).toBeNull();

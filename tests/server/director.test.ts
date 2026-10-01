@@ -213,6 +213,37 @@ describe('research first iteration', () => {
     });
 });
 
+describe('research system prompt clock', () => {
+    // A continuing conversation rebuilds its prompt every iteration. Stating the start
+    // rather than the current moment keeps that prompt a stable cache prefix; the time
+    // since arrives as clock steps (see clock.test.ts).
+    test('states the moment the conversation started, not the current one', async () => {
+        const previousMock = globalThis.__pipaliMockLLM;
+        let systemMessage: string | undefined;
+        globalThis.__pipaliMockLLM = (_query, ctx) => {
+            systemMessage = (ctx?.messages?.[0] as { content?: string } | undefined)?.content;
+            return { message: 'Done.', raw: [] };
+        };
+        try {
+            for await (const iteration of research({
+                chatHistory: trajectory([
+                    { source: 'system', message: 'You are Pipali.' },
+                    { source: 'user', message: 'hi' },
+                ]),
+                startedAt: new Date(2026, 8, 18, 15),
+                maxIterations: 2,
+            })) {
+                if (iteration.isToolCallStart) continue;
+            }
+        } finally {
+            globalThis.__pipaliMockLLM = previousMock;
+        }
+
+        expect(systemMessage).toContain('Conversation Started (in User Local Timezone): Friday, 2026-09-18 afternoon');
+        expect(systemMessage).not.toContain('Current Date');
+    });
+});
+
 describe('research request tracing', () => {
     // Requests are traced with the conversation row id, the handle that resolves
     // against /api/chat/:id/history. The ATIF session_id is a separate identifier.

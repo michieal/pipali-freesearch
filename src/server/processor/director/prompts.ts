@@ -33,7 +33,7 @@ Assuming you can search through files and the web.
 
 # Background Context
 You are running securely on the user's actual machine.
-- Current Date, Time (in User Local Timezone): {day_of_week}, {current_date} {current_time}
+- Conversation Started (in User Local Timezone): {conversation_started}. Changes to the date or time of day are announced in the conversation.
 - Operating System: {os_info}
 - User Language: {language}
 - User Location: {location}

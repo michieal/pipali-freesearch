@@ -2,11 +2,12 @@
  * File Viewer Tests
  *
  * A file Pipali writes opens beside the chat from its link. HTML renders in a frame that
- * runs nothing; source renders highlighted with a line gutter.
+ * runs nothing; source renders highlighted with a line gutter; a Word document renders as
+ * a page in the same frame.
  */
 
 import { test, expect } from '@playwright/test';
-import { mkdir, rm, writeFile } from 'fs/promises';
+import { copyFile, mkdir, rm, writeFile } from 'fs/promises';
 import { ChatPage } from '../helpers/page-objects';
 import { Selectors } from '../helpers/selectors';
 import { FILE_VIEWER_DIR } from '../fixtures/mock-llm';
@@ -22,6 +23,7 @@ test.describe('File viewer', () => {
     test.beforeAll(async () => {
         await mkdir(FILE_VIEWER_DIR, { recursive: true });
         await writeFile(`${FILE_VIEWER_DIR}/export.md`, EXPORT_TEXT);
+        await copyFile(new URL('../../fixtures/brief.docx', import.meta.url), `${FILE_VIEWER_DIR}/brief.docx`);
     });
 
     test.beforeEach(async ({ page }) => {
@@ -36,6 +38,7 @@ test.describe('File viewer', () => {
         await rm(`${FILE_VIEWER_DIR}/summarize.ts`, { force: true });
         await rm(`${FILE_VIEWER_DIR}/notes.md`, { force: true });
         await rm(`${FILE_VIEWER_DIR}/export.md`, { force: true });
+        await rm(`${FILE_VIEWER_DIR}/brief.docx`, { force: true });
         await rm(FILE_VIEWER_DIR, { recursive: true, force: true });
     });
 
@@ -76,6 +79,19 @@ test.describe('File viewer', () => {
         await expect(viewer.locator(`${Selectors.fileViewerFrontmatter} .hljs-attr`).first()).toHaveText('title:');
         await expect(viewer.locator(`${Selectors.fileViewerMarkdown} h1`)).toHaveText('Agenda');
         await expect(viewer.locator(`${Selectors.fileViewerMarkdown} h2`)).toHaveCount(0);
+    });
+
+    test('shows a Word document as a page in the sandboxed frame', async ({ page }) => {
+        await page.locator(`${Selectors.assistantMessage} a[href$="brief.docx"]`).first().click();
+
+        const viewer = page.locator(Selectors.fileViewer);
+        await expect(viewer.locator(Selectors.fileViewerName)).toHaveText('brief.docx');
+        await expect(viewer.locator(Selectors.fileViewerFrame)).toHaveAttribute('sandbox', 'allow-same-origin');
+
+        const document = page.frameLocator(Selectors.fileViewerFrame);
+        await expect(document.locator('h1')).toHaveText('Project brief');
+        await expect(document.locator('strong')).toHaveText('doubled');
+        await expect(document.locator('td').first()).toHaveText('Cohort');
     });
 
     test('shows a large markdown file as plain text and switches away from it promptly', async ({ page }) => {

@@ -18,9 +18,12 @@ export function NotificationsSection() {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Settled together so the card never renders a half-known state, like the empty
+    // list flashing past before the devices arrive.
     const refresh = useCallback(async () => {
-        setState(await getPushState());
-        setDevices(await listPushDevices());
+        const [pushState, pushDevices] = await Promise.all([getPushState(), listPushDevices()]);
+        setState(pushState);
+        setDevices(pushDevices);
     }, []);
 
     useEffect(() => { void refresh(); }, [refresh]);
@@ -52,6 +55,8 @@ export function NotificationsSection() {
 
     const formatWhen = (iso: string) => new Date(iso).toLocaleString(i18n.language);
 
+    const blocked = state === 'unsupported' || state === 'denied';
+
     return (
         <div className="settings-section">
             <div className="settings-section-header">
@@ -64,63 +69,73 @@ export function NotificationsSection() {
                         {t('notifications.push.description')}
                     </p>
                 </div>
-                <label className="toggle-switch">
-                    <input
-                        id="push-enabled"
-                        type="checkbox"
-                        checked={state === 'on'}
-                        disabled={busy || state === null || state === 'unsupported' || state === 'denied'}
-                        onChange={(e) => void toggle(e.target.checked)}
-                    />
-                    <span className="toggle-slider"></span>
-                </label>
+                <div className="settings-section-control">
+                    {busy && <Loader2 size={14} className="settings-spinner" />}
+                    <label className="toggle-switch">
+                        <input
+                            id="push-enabled"
+                            type="checkbox"
+                            checked={state === 'on'}
+                            disabled={busy || state === null || blocked}
+                            onChange={(e) => void toggle(e.target.checked)}
+                        />
+                        <span className="toggle-slider"></span>
+                    </label>
+                </div>
             </div>
 
-            {state === 'unsupported' && (
-                <p className="settings-field-hint">{t('notifications.push.unsupported')}</p>
-            )}
-            {state === 'denied' && (
-                <p className="settings-field-hint">{t('notifications.push.denied')}</p>
-            )}
-            {error && (
-                <div className="settings-error">
-                    <AlertCircle size={14} />
-                    <span>{error}</span>
-                </div>
-            )}
+            <div className="settings-section-body">
+                {blocked && (
+                    <p className="settings-notice">
+                        <AlertCircle size={14} />
+                        <span>
+                            {state === 'denied'
+                                ? t('notifications.push.denied')
+                                : t('notifications.push.unsupported')}
+                        </span>
+                    </p>
+                )}
+                {error && (
+                    <div className="settings-error">
+                        <AlertCircle size={14} />
+                        <span>{error}</span>
+                    </div>
+                )}
 
-            {/* Devices are listed whatever this browser's own state is: the point is to see
-                and revoke the phones being notified, which is rarely the machine you are on. */}
-            {devices.length > 0 ? (
-                <>
-                    <p className="settings-field-hint">{t('notifications.push.devices')}</p>
-                    <ul className="settings-device-list">
-                        {devices.map((device) => (
-                            <li key={device.id} className="settings-device">
-                                <span className="settings-device-label">{device.label}</span>
-                                <span className="settings-device-meta">
-                                    {device.lastNotifiedAt
-                                        ? t('notifications.push.lastNotified', { when: formatWhen(device.lastNotifiedAt) })
-                                        : t('notifications.push.never')}
-                                </span>
-                                <button
-                                    type="button"
-                                    className="settings-device-remove"
-                                    title={t('notifications.push.remove')}
-                                    aria-label={t('notifications.push.remove')}
-                                    onClick={() => void forget(device.id)}
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                </>
-            ) : (
-                state !== 'unsupported' && <p className="settings-field-hint">{t('notifications.push.noDevices')}</p>
-            )}
-
-            {busy && <Loader2 size={14} className="settings-spinner" />}
+                {/* Devices are listed whatever this browser's own state is: the point is to see
+                    and revoke the phones being notified, which is rarely the machine you are on. */}
+                {devices.length > 0 ? (
+                    <div>
+                        <p className="settings-subhead">{t('notifications.push.devices')}</p>
+                        <ul className="settings-device-list">
+                            {devices.map((device) => (
+                                <li key={device.id} className="settings-device">
+                                    <span className="settings-device-labels">
+                                        <span className="settings-device-label">{device.label}</span>
+                                        <span className="settings-device-meta">
+                                            {device.lastNotifiedAt
+                                                ? t('notifications.push.lastNotified', { when: formatWhen(device.lastNotifiedAt) })
+                                                : t('notifications.push.never')}
+                                        </span>
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className="settings-device-remove"
+                                        title={t('notifications.push.remove')}
+                                        aria-label={t('notifications.push.remove')}
+                                        onClick={() => void forget(device.id)}
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                ) : (
+                    state !== null && state !== 'unsupported' &&
+                        <p className="settings-empty">{t('notifications.push.noDevices')}</p>
+                )}
+            </div>
         </div>
     );
 }

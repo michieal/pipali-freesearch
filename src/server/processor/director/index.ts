@@ -32,6 +32,7 @@ import { getChatModelById, getDefaultChatModel } from '../../db';
 import * as prompts from './prompts';
 import { getLoadedSkills, formatSkillsForPrompt } from '../../skills';
 import { formatMemoryForPrompt, MEMORY_RECALL_KIND } from '../../memory';
+import { formatLocalDateTime } from '../clock';
 import { type ATIFMetrics, type ATIFObservationResult, type ATIFStep, type ATIFToolCall, type ATIFTrajectory } from '../conversation/atif/atif.types';
 import { addMetrics } from '../conversation/atif/atif.utils';
 import type { ConfirmationContext } from '../confirmation';
@@ -112,26 +113,12 @@ export function truncateToolOutput(
     });
 }
 
-/** Get time of day from hour to balance model context with context cache.
- *  Distinguish next date after midnight from previous date night for LLM.
- */
-function getTimeOfDay(date: Date): string {
-    const hour = date.getHours();
-    if (hour >= 0 && hour < 4) return 'after midnight';
-    if (hour >= 4 && hour < 8) return 'early morning';
-    if (hour >= 8 && hour < 12) return 'morning';
-    if (hour >= 12 && hour < 17) return 'afternoon';
-    if (hour >= 17 && hour < 21) return 'evening';
-    if (hour >= 21 && hour < 24) return 'night';
-    return '';
-}
-
 interface ResearchConfig {
     chatHistory: ATIFTrajectory;
     maxIterations: number;
     currentIteration?: number;
-    currentDate?: string;
-    dayOfWeek?: string;
+    /** When the conversation's system prompt was written; the prompt states this moment, not the current one */
+    startedAt?: Date;
     location?: string;
     username?: string;
     userContext?: string;
@@ -188,8 +175,8 @@ async function buildMcpContext(): Promise<string> {
 }
 
 export async function buildSystemPrompt(args: {
-    currentDate?: string;
-    dayOfWeek?: string;
+    /** Moment the prompt describes as the conversation's start. Defaults to now, for a new conversation. */
+    startedAt?: Date;
     location?: string;
     language?: string;
     username?: string;
@@ -200,10 +187,7 @@ export async function buildSystemPrompt(args: {
     /** Catalogue to list, frozen at conversation start by the caller. Live changes arrive as steps. */
     memoryCatalogue?: string;
     memoriesEnabled?: boolean;
-    now?: Date;
 }): Promise<string> {
-    const now = args.now ?? new Date();
-
     const userContext = args.userContext
         ? await prompts.userContext.format({ userContext: args.userContext })
         : '';
@@ -232,9 +216,7 @@ export async function buildSystemPrompt(args: {
         skills_context: skillsContext,
         mcp_context: mcpContext,
         first_conversation_context: firstConversationContext,
-        current_date: args.currentDate ?? now.toLocaleDateString('en-CA'),
-        current_time: getTimeOfDay(now),
-        day_of_week: args.dayOfWeek ?? now.toLocaleDateString('en-US', { weekday: 'long' }),
+        conversation_started: formatLocalDateTime(args.startedAt ?? new Date()),
         location: args.location ?? 'Unknown',
         username: args.username ?? 'User',
         language: new Intl.DisplayNames(['en'], { type: 'language' }).of(args.language || Intl.DateTimeFormat().resolvedOptions().locale) ?? 'English',
@@ -749,7 +731,7 @@ async function resolveProviderToolSearchMode(chatModelId?: number, user?: typeof
 async function pickNextTool(
     config: ResearchConfig
 ): Promise<ResearchIteration> {
-    const { currentDate, dayOfWeek, location, username, userContext, currentIteration = 0, maxIterations, thresholdStepCount } = config;
+    const { startedAt, location, username, userContext, currentIteration = 0, maxIterations, thresholdStepCount } = config;
     const isLast = currentIteration >= maxIterations - 1;
 
     // Get all tools (built-in + delegation + MCP). A delegated task does its own work
@@ -763,8 +745,7 @@ async function pickNextTool(
 
     const now = new Date();
     const systemPrompt = config.systemPrompt ?? await buildSystemPrompt({
-        currentDate,
-        dayOfWeek,
+        startedAt,
         location,
         username,
         userContext,
@@ -772,7 +753,6 @@ async function pickNextTool(
         conversationRole: config.conversationRole,
         memoryCatalogue: config.memoryCatalogue,
         memoriesEnabled: config.memoriesEnabled,
-        now,
     });
 
     // Check if this is the first agent iteration. Auxiliary system steps like a

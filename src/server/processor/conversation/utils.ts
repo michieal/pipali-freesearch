@@ -50,7 +50,7 @@ function hasProviderAgnosticImage(content: any[]): boolean {
  * Compaction steps are marked with extra.is_compaction = true and contain
  * a summary of the conversation history up to that point.
  */
-function findMostRecentCompactionIndex(history: ATIFStep[]): number {
+export function findMostRecentCompactionIndex(history: ATIFStep[]): number {
     for (let i = history.length - 1; i >= 0; i--) {
         const step = history[i]!;
         if (step.extra?.is_compaction === true) {

@@ -9,12 +9,15 @@
  * The content route never emits text/html. Whatever the file's extension, the body is
  * text/plain with nosniff and a sandboxing CSP, so the URL opened directly in a tab shows
  * source rather than a page running on the API's origin. The client decides how to render.
+ * A Word document has no source to show, so it goes out as the HTML mammoth makes of it,
+ * under the same headers.
  */
 
 import os from 'os';
 import path from 'path';
 import { realpath, stat } from 'fs/promises';
 import { Hono } from 'hono';
+import mammoth from 'mammoth';
 import { isPathDeniedForRead } from '../sandbox';
 import { expandPath } from '../utils';
 import { createChildLogger } from '../logger';
@@ -109,6 +112,18 @@ files.get('/', async (c) => {
     }
 });
 
+/** The HTML mammoth makes of a Word document, or null when it cannot read the file as one */
+async function docxToHtml(bytes: Uint8Array, filePath: string): Promise<string | null> {
+    try {
+        const { value, messages } = await mammoth.convertToHtml({ buffer: Buffer.from(bytes) });
+        if (messages.length) log.debug({ messages, path: filePath }, 'Document converted with warnings');
+        return value;
+    } catch (err) {
+        log.warn({ err, path: filePath }, 'Could not convert document');
+        return null;
+    }
+}
+
 // Source of a text file for the viewer panel, always as inert plain text
 files.get('/content', async (c) => {
     const filePath = c.req.query('path');
@@ -120,10 +135,15 @@ files.get('/content', async (c) => {
 
     try {
         const bytes = new Uint8Array(await Bun.file(file.realPath).arrayBuffer());
-        if (bytes.subarray(0, BINARY_SNIFF_BYTES).includes(0)) {
+        let body: Uint8Array<ArrayBuffer> | string = bytes;
+        if (path.extname(filePath).toLowerCase() === '.docx') {
+            const html = await docxToHtml(bytes, file.realPath);
+            if (html === null) return c.json({ error: 'Document could not be read' }, 422);
+            body = html;
+        } else if (bytes.subarray(0, BINARY_SNIFF_BYTES).includes(0)) {
             return c.json({ error: 'Binary files cannot be viewed as text' }, 415);
         }
-        return c.body(bytes, 200, {
+        return c.body(body, 200, {
             'Content-Type': 'text/plain; charset=utf-8',
             'X-Content-Type-Options': 'nosniff',
             'Content-Security-Policy': 'sandbox',

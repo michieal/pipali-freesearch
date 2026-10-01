@@ -35,17 +35,18 @@ const GRAMMARS = {
 };
 for (const [name, grammar] of Object.entries(GRAMMARS)) hljs.registerLanguage(name, grammar);
 
-export type FileViewKind = 'html' | 'markdown' | 'text' | 'image';
+export type FileViewKind = 'html' | 'markdown' | 'text' | 'image' | 'docx';
 
 const KIND_BY_EXTENSION: Record<string, FileViewKind> = {
     html: 'html', htm: 'html', xhtml: 'html',
     md: 'markdown', markdown: 'markdown',
+    docx: 'docx', // arrives as the HTML the content route converts it to
     png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image',
 };
 
 // Formats with a viewer of their own, or with no text to show
 const EXTERNAL_EXTENSIONS = new Set([
-    'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'pages', 'numbers', 'key',
+    'doc', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'pages', 'numbers', 'key',
     'rtf', 'pdf', 'epub',
     'zip', 'gz', 'tgz', 'bz2', 'xz', '7z', 'rar', 'tar', 'dmg', 'pkg', 'iso',
     'mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'mp4', 'mov', 'avi', 'mkv', 'webm',
